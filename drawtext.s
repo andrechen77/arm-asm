@@ -283,7 +283,6 @@ DivTenRem:
 	bl DivTenRemSmall // r0: restQuot, r1: restRem
 	add r0, r0, r4 // r0: msnQuot + restQuot
 	pop {r4, r5, pc}
-
 // end DivTenRem
 
 // Feel free to use helpful constants below

@@ -38,9 +38,9 @@ type PixBuffer = [[u16; PIX_WIDTH]; PIX_HEIGHT], // not a regular array;
 .EQU PIXBUFFER_ROWSHIFT, 0x400 // (1 << 10)
 
 /*
-type IdSpace = [[u8; PIX_WIDTH]; PIX_HEIGHT];
+type ShadowSpace = [[u32; PIX_WIDTH]; PIX_HEIGHT];
 */
-.EQU IDSPACE_SIZE, PIX_WIDTH * PIX_HEIGHT
+.EQU SHADOWSPACE_SIZE, PIX_WIDTH * PIX_HEIGHT
 
 /*
 struct Pixmap {
@@ -58,40 +58,65 @@ struct Pixmap {
 /*
 struct Sprite {
 	appearance: *Pixmap,
-	xPos: u16,
-	width: u16,
-	yPos: u16,
-	height: u16,
+	xPos: i16,
+	yPos: i16,
+}
+*/
+.EQU SPRITE_FIELD_APPEARANCE, 0
+.EQU SPRITE_FIELD_XPOS, 4
+.EQU SPRITE_FIELD_YPOS, 6
+.EQU SPRITE_SIZE, 8
+
+/*
+struct Entity extends Sprite {
+	xRad: u16
+	yRad: u16
 	xVel: i8,
 	yVel: i8,
 	xAccel: i8,
 	yAccel: i8,
 }
 */
-.EQU SPRITE_FIELD_APPEARANCE, 0
-.EQU SPRITE_FIELD_XPOS, 4
-.EQU SPRITE_FIELD_WIDTH, 6
-.EQU SPRITE_FIELD_YPOS, 8
-.EQU SPRITE_FIELD_HEIGHT, 10
-.EQU SPRITE_FIELD_XVEL, 12
-.EQU SPRITE_FIELD_YVEL, 13
-.EQU SPRITE_FIELD_ACCEL, 14
-.EQU SPRITE_FIELD_ACCEL, 15
-.EQU SPRITE_SIZE, 16
+.EQU ENTITY_FIELD_XRAD, 8
+.EQU ENTITY_FIELD_YRAD, 10
+.EQU ENTITY_FIELD_XVEL, 12
+.EQU ENTITY_FIELD_YVEL, 13
+.EQU ENTITY_FIELD_XACCEL, 14
+.EQU ENTITY_FIELD_YACCEL, 15
+.EQU ENTITY_SIZE, 16
 
 // global data
 
+// bufferA: PixBuffer
 .align 1
 bufferA:
 	.skip PIXBUFFER_SIZE
 
+// bufferB: PixBuffer
 .align 1
 bufferB:
 	.skip PIXBUFFER_SIZE
 
-.align 0
-idSpace:
-	.skip IDSPACE_SIZE
+// tick: u32
+.align 4
+tick:
+	.word -100
+
+// entities: Vec<Entity>
+.align 2
+entities:
+	// entities.len
+	.word 2
+	// entities[0] // player
+	.long mario
+	.hword 160, 120
+	.hword 16, 16
+	.byte 0, 0, 0, 1
+	// entities[1] // ball
+	.long simplePix
+	.hword 16, 20
+	.hword 4, 4
+	.byte 2, 1, 0, 0
 
 // functions
 .text
@@ -123,53 +148,213 @@ main:
 
 	ldr r4, =REG_PIX_BACKBUFFER
 
-	mov r6, #16 // xpos
-	mov r7, #100 // ypos
 	mov r8, #7 // xvel
 	mov r9, #0 // yvel
 	mov r10, #1 // yacc
 
 main_loop:
 	bl waitVsync
-	ldr r5, [r4] // r5 is a pointer to the backbuffer
 
-	mov r0, r5
-	mov r1, #0xff
-	bl clearVga
-
-	mov r0, r5
-	ldr r1, =mario
-	mov r2, r6
-	mov r3, r7
-	bl bitBlit
+	ldr r0, [r4] // r5 is a pointer to the backbuffer
+	ldr r1, =entities
+	bl renderFrame
 
 	bl swapBuffers
 
 	// calculate next frame
-	add r6, r6, r8
-	cmp r6, #304
-	bge bouncex
-	cmp r6, #16
-	blt bouncex
-	b nobouncex
-bouncex:
-	rsb r8, r8, #0
-nobouncex:
-	add r7, r7, r9
-	add r9, r9, r10
-	cmp r7, #224
-	bge bouncey
-	b nobouncey
-bouncey:
-	mov r7, #224
-	rsb r9, r9, #0
-nobouncey:
+	bl advanceFrame
 
 	b main_loop
 
 
 	pop {r4, r5, lr}
 // end main
+
+/*
+advanceFrame: changes the game state to reflect the next frame
+
+advanceFrame() {
+	tick += 1;
+
+	for entity in entities {
+		moveWithBounce(&mut entity);
+	}
+}
+*/
+advanceFrame:
+	push {r4-r6, lr}
+
+	ldr r0, =tick
+	ldr r1, [r0]
+	add r1, r1, #1
+	str r1, [r0]
+
+	// loop through all entities
+	mov r4, #0
+	ldr r6, =entities
+	ldr r5, [r6], #4
+	b advanceFrame_cond
+advanceFrame_body:
+
+	add r0, r6, r4, lsl #4
+	bl moveWithBounce
+
+	add r4, r4, #1
+advanceFrame_cond:
+	cmp r4, r5
+	blo advanceFrame_body
+
+	pop {r4-r6, pc}
+// end advanceFrame
+
+/*
+moveWithBounce: moves the entity according to its velocity and acceleration, bouncing when it hits a
+screen boundary. Returns whether a bounce occured
+
+moveWithBounce(entity: *Entity) -> bool {
+	let mut bounced = false;
+
+	let (xMin, xMax) = (entity.xRad, PIX_WIDTH - entity.xRad);
+	entity.xPos += entity.xVel;
+	if (entity.xPos <= xMin || entity.xPos >= xMax) {
+		if (entity.xPos <= xMin) {
+			entity.xPos = xMin;
+		}
+		if (entity.xPos >= xMax) {
+			entity.xPos = xMax;
+		}
+		bounced = true;
+		entity.xVel = -entity.xVel;
+	} else {
+		entity.xVel += entity.xAccel;
+	}
+
+	// repeat the same for y
+
+	return bounced;
+}
+*/
+moveWithBounce:
+	push {r4-r7}
+
+	// r0 = entity
+
+	// r1 = bounced
+	mov r1, #0
+
+	// (r2, r3) = (xMin, xMax)
+	ldrh r2, [r0, #ENTITY_FIELD_XRAD]
+	rsb r3, r2, #PIX_WIDTH
+
+	// r4 = entity.xPos, r5 = entity.xVel
+	ldrh r4, [r0, #SPRITE_FIELD_XPOS]
+	ldrsb r5, [r0, #ENTITY_FIELD_XVEL]
+
+	add r4, r4, r5
+	cmp r4, r2
+	movle r4, r2
+	ble moveWithBounce_bounceX
+	cmp r4, r3
+	movge r4, r3
+	bge moveWithBounce_bounceX
+	ldrsb r2, [r0, #ENTITY_FIELD_XACCEL]
+	add r5, r5, r2
+	b moveWithBounce_xDone
+moveWithBounce_bounceX:
+	mov r1, #1
+	rsb r5, r5, #0
+moveWithBounce_xDone:
+
+	// (r2, r3) = (xMin, xMax)
+	ldrh r2, [r0, #ENTITY_FIELD_YRAD]
+	rsb r3, r2, #PIX_HEIGHT
+
+	// r6 = entity.yPos, r7 = entity.yVel
+	ldrh r6, [r0, #SPRITE_FIELD_YPOS]
+	ldrsb r7, [r0, #ENTITY_FIELD_YVEL]
+
+	add r6, r6, r7
+	cmp r6, r2
+	movle r6, r2
+	ble moveWithBounce_bounceY
+	cmp r6, r3
+	movge r6, r3
+	bge moveWithBounce_bounceY
+	ldrsb r2, [r0, #ENTITY_FIELD_YACCEL]
+	add r7, r7, r2
+	b moveWithBounce_yDone
+moveWithBounce_bounceY:
+	mov r1, #1
+	rsb r7, r7, #0
+moveWithBounce_yDone:
+
+	// restore the fields in memory
+	strh r4, [r0, #SPRITE_FIELD_XPOS]
+	strb r5, [r0, #ENTITY_FIELD_XVEL]
+	strh r6, [r0, #SPRITE_FIELD_YPOS]
+	strb r7, [r0, #ENTITY_FIELD_YVEL]
+
+	// return whether it bounced
+	mov r0, r1
+
+	pop {r4-r7}
+	bx lr
+// end moveWithBounce
+
+/*
+renderFrame(buffer: *PixBuffer, entities: *Vec<Entity>) {
+	clearVga();
+	for entity in entities {
+		bitBlit(buffer, entity.sprite, entity.sprite.xPos, entity.sprite.yPos);
+	}
+	clearTextBuffer();
+	drawNum(0, 0, tick);
+}
+*/
+renderFrame:
+	push {r4-r7, lr}
+	// r0 = buffer
+	// r1 = entities
+
+	// r4 = buffer
+	mov r4, r0
+	// r5 = entities.data
+	add r5, r1, #4
+
+	// clearVga();
+	// r0 is already the buffer address
+	ldr r1, =0x0
+	bl clearVga
+
+	// loop from 0 to entities.len
+	mov r6, #0
+	ldr r7, [r5, #-4]
+	b renderFrame_cond
+renderFrame_body:
+
+	// bitBlit(buffer, entity, entity,xPos, entity.yPos)
+	mov r0, r4
+	add r1, r5, r6, lsl #4
+	ldrh r2, [r1, #SPRITE_FIELD_XPOS]
+	ldrh r3, [r1, #SPRITE_FIELD_YPOS]
+	ldr r1, [r1, #SPRITE_FIELD_APPEARANCE]
+	bl bitBlit
+
+	add r6, r6, #1
+renderFrame_cond:
+	cmp r6, r7
+	blo renderFrame_body
+
+	// drawNum(0, 0, tick)
+	bl clearTextBuffer
+	mov r0, #0
+	mov r1, #0
+	ldr r2, =tick
+	ldr r2, [r2]
+	bl drawNum
+
+	pop {r4-r7, pc}
+// end renderFrame
 
 /*
 setUpDoubleBuffer
@@ -438,6 +623,229 @@ bitBlit_outerCond:
 
 	pop {r4-r9, pc}
 // end bitBlit
+
+/*
+drawStr: draws a null-terminated string into the character buffer
+
+drawStr(x: uint, y: uint, str: *char) {
+	let bufferRow: [u8; TEXT_WIDTH] = TEXT_BUFFER[y];
+	let mut col = x;
+	let mut p = str;
+	while x < TEXT_WIDTH && *p != '\0' {
+		bufferRow[col] = *p;
+		col += 1;
+		p += 1;
+	}
+}
+*/
+drawStr:
+	// r0 = x
+	// r1 = y
+	// r2 = str
+
+	// r1 = bufferRow
+	lsl r1, r1, #7
+	add r1, r1, #TEXT_BUFFER
+
+	// r0 = col
+	// r3 = *p
+	b drawStr_cond
+drawStr_loop:
+
+	strb r3, [r1, r0]
+	add r0, r0, #1
+	add r2, r2, #1
+
+drawStr_cond:
+	cmp r0, #TEXT_WIDTH
+	bhs drawStr_end
+	ldrb r3, [r2]
+	cmp r3, #0
+	bne drawStr_loop
+
+drawStr_end:
+	bx lr
+// end drawStr
+
+/*
+drawNum: draws a signed integer into the character buffer
+
+drawNum(x: uint, y: uint, num: i32) {
+	let mut remainingDigits = num;
+	let mut buffer: [u8; 12]; // max int is 10 decimal digits, plus two for null terminator and minus
+	let mut = 11; // index to the first element of the array
+	buffer[index] = '\0';
+
+	// add digits to buffer
+	if num == 0 {
+		index -= 1;
+		buffer[index] = '0';
+	} else {
+		// handle negative
+		if num < 0 {
+			remainingDigits = -remainingDigits;
+		}
+
+		// extract digits
+		let mut rem;
+		// write to the array from right to left
+		while remainingDigits > 0 {
+			(remainingDigits, rem) = divTenRem(remainingDigits);
+			index -= 1;
+			buffer[index] = toAscii(rem);
+		}
+
+		if num < 0 {
+			index -= 1;
+			buffer[index] = '-';
+		}
+	}
+
+	// print buffer
+	drawStr(x, y, (buffer as *u8) + index);
+}
+*/
+drawNum:
+	push {r4-r7, lr}
+
+	// sp = buffer
+	sub sp, sp, #12
+
+	// r4 = x, r5 = y, r6 = num, r7 = index
+	mov r4, r0
+	mov r5, r1
+	mov r6, r2
+	mov r7, #11
+
+	// buffer[index] = '\0';
+	mov r0, #0
+	strb r0, [sp, r7]
+
+	// r0 = num, r0 = remainingDigits
+	movs r0, r2
+
+	// handle zero
+	beq drawNum_isZero
+
+	// handle negative possibility
+	rsblt r0, r0, #0
+
+	// extract digits
+	b drawNum_cond
+drawNum_loop:
+
+	// r0 = remainingDigits, r1 = rem
+	bl divTenRem
+	sub r7, r7, #1
+	add r1, r1, #48 // r1 = toAscii(rem)
+	strb r1, [sp, r7]
+
+drawNum_cond:
+	cmp r0, #0
+	bhi drawNum_loop
+
+	// maybe add minus sign
+	cmp r6, #0
+	bge drawNum_skipMinusSign
+	sub r7, r7, #1
+	mov r1, #45 // r1: '-'
+	strb r1, [sp, r7]
+drawNum_skipMinusSign:
+
+	b drawNum_print
+drawNum_isZero:
+	sub r7, r7, #1
+	mov r1, #48 // r1 = '0'
+	strb r1, [sp, r7]
+
+drawNum_print:
+	mov r0, r4
+	mov r1, r5
+	add r2, sp, r7
+	bl drawStr
+
+	add sp, sp, #12 // deallocate array of 12 bytes
+	pop {r4-r7, pc}
+// end drawNum
+
+/*
+divTenRemSmall
+
+Divides an unsigned number by 10, returning its quotient and remainder. Will not work for numbers
+larger than about 6.7e8.
+Algorithm for dividing by 10 credited to:
+Vowels, R. A. (1992). "Division by 10". Australian Computer Journal. 24 (3): 81–85.
+
+Parameters:
+	r0: int dividend
+Returns:
+	r0: int quotient
+	r1: int remainder
+*/
+divTenRemSmall:
+	mov r1, r0 // save the divident for later
+
+	// divide r0 by 10
+	add r0, r0, #1
+	lsl r0, r0, #1
+	add r0, r0, r0, lsl #1
+	add r0, r0, r0, lsr #4
+	add r0, r0, r0, lsr #8
+	add r0, r0, r0, lsr #16
+	lsr r0, r0, #6
+
+	// subtract quotient * 10 from the dividend to get remainder
+	sub r1, r1, r0, lsl #3 // divident - 8 * quotient
+	sub r1, r1, r0, lsl #1 // divident - 8 * quotient - 2 * quotient
+
+	bx lr
+// end divTenRemSmall
+
+/*
+divTenRem
+
+Divides an unsigned number by 10, returning its quotient and remainder. Will work for any unsigned
+32-bit number, unlike divTenRemSmall.
+
+Parameters:
+	r0: int dividend
+Returns:
+	r0: int quotient
+	r1: int remainder
+
+Pseudocode:
+if (dividend <= 0x10000000) { // 28 bits is safely below the maximum valid input for divTenRemSmall
+	return divTenRemSmall(dividend);
+}
+int msn = dividend & 0xf0000000; // "most significant nybble"
+int rest = dividend - msn;
+msn >>= 4;
+(int msnQuot, int msnRem) = divTenRemSmall(msn);
+msnQuot <<= 4;
+rest += msnRem << 4;
+(int restQuot, int restRem) = divTenRemSmall(rest);
+return (msnQuot + restQuot, restRem);
+*/
+divTenRem:
+	// r0: dividend
+	cmp r0, #0x10000000
+	bhi divTenRem_continue
+	push {lr}
+	bl divTenRemSmall
+	pop {pc}
+
+	divTenRem_continue:
+	push {r4, r5, lr}
+	and r4, r0, #0xf0000000 // r4: msn
+	sub r5, r0, r4 // r5: rest
+	lsr r0, r4, #4 // r0: msn
+	bl divTenRemSmall // r0: msnQuot, r1: msnRem
+	lsl r4, r0, #4 // r4: msnQuot
+	add r0, r5, r1, lsl $4 // r0: rest
+	bl divTenRemSmall // r0: restQuot, r1: restRem
+	add r0, r0, r4 // r0: msnQuot + restQuot
+	pop {r4, r5, pc}
+// end divTenRem
 
 // assets
 .data
