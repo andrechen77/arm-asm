@@ -109,14 +109,14 @@ entities:
 	.word 2
 	// entities[0] // player
 	.long mario
-	.hword 160, 120
+	.hword 160, 100
 	.hword 16, 16
-	.byte 0, 0, 0, 1
+	.byte 0, 10, 0, 1
 	// entities[1] // ball
 	.long simplePix
-	.hword 16, 20
+	.hword 140, 40
 	.hword 4, 4
-	.byte 2, 1, 0, 0
+	.byte 1, 0, 0, 1
 
 // functions
 .text
@@ -179,6 +179,7 @@ advanceFrame() {
 	for entity in entities {
 		moveWithBounce(&mut entity);
 	}
+	processCollisions();
 }
 */
 advanceFrame:
@@ -204,12 +205,138 @@ advanceFrame_cond:
 	cmp r4, r5
 	blo advanceFrame_body
 
+	// processCollisions();
+	bl processCollisions
+
 	pop {r4-r6, pc}
 // end advanceFrame
 
 /*
+processCollisions: makes colliding sprites interact. If a player hits a ball, the ball gets "caught"
+by the player and is given twice player's upward velocity. The player then loses all upward velocity.
+Balls pass through each other
+
+processCollisions() {
+	let player = entities[0];
+	for ball in entities[1..] {
+		if checkCollision(player, ball) {
+			ball.yPos = player.yPos - player.yRad - ball.yRad;
+			ball.yVel = min(0, player.yVel * 2);
+			player.yVel = 0;
+		}
+	}
+}
+*/
+processCollisions:
+	push {r4-r5, lr}
+
+	// r4 = &entities[0], r5 = &entities[entities.len]
+	ldr r4, =entities
+	ldr r5, [r4]
+	add r4, #4
+	mov r0, #ENTITY_SIZE
+	mla r5, r5, r0, r4
+
+	// r5 = entities[i]
+	b processCollisions_cond
+processCollisions_body:
+
+	mov r0, r4
+	mov r1, r5
+	bl checkCollision
+	cmp r0, #0
+	beq processCollisions_cond
+
+	// ball.yPos = player.yPos - player.yRad - ball.yRad;
+	ldrh r0, [r4, #SPRITE_FIELD_YPOS]
+	ldrh r1, [r4, #ENTITY_FIELD_YRAD]
+	sub r0, r0, r1
+	ldrh r1, [r5, #ENTITY_FIELD_YRAD]
+	sub r0, r0, r1
+	strh r0, [r5, #SPRITE_FIELD_YPOS]
+
+	// ball.yVel = min(0, player.yVel * 2);
+	ldrsb r0, [r4, #ENTITY_FIELD_YVEL]
+	add r0, r0, r0
+	cmp r0, #0
+	movgt r0, #0
+	strb r0, [r5, #ENTITY_FIELD_YVEL]
+
+	// player.yVel = 0;
+	mov r0, #0
+	strb r0, [r4, #ENTITY_FIELD_YVEL]
+
+processCollisions_cond:
+	sub r5, #ENTITY_SIZE
+	cmp r5, r4
+	bgt processCollisions_body
+
+	pop {r4-r5, pc}
+// end processCollisions
+
+/*
+checkCollision(a: *Entity, b: *Entity) -> bool {
+	let dx = b.x - a.x;
+	let collisionDx = max(a.xRad, b.xRad);
+
+	let dy = b.y - a.y;
+	let collisionDy = max(a.yRad, b.yRad);
+
+	return abs(dx) <= collisionDx && abs(dy) <= collisionDy;
+}
+*/
+checkCollision:
+	push {r4}
+
+	// r0 = a
+	// r1 = b
+
+	// r2 = abs(dx)
+	ldrh r2, [r0, #SPRITE_FIELD_XPOS]
+	ldrh r3, [r1, #SPRITE_FIELD_XPOS]
+	subs r2, r3, r2
+	rsblt r2, r2, #0
+
+	// r3 = collisionDx
+	ldrh r3, [r0, #ENTITY_FIELD_XRAD]
+	ldrh r4, [r1, #ENTITY_FIELD_XRAD]
+	cmp r3, r4
+	movlt r3, r4
+
+	// early return false if x does not collide
+	cmp r2, r3
+	bgt checkCollision_noCollision
+
+	// r2 = abs(dy)
+	ldrh r2, [r0, #SPRITE_FIELD_YPOS]
+	ldrh r3, [r1, #SPRITE_FIELD_YPOS]
+	subs r2, r3, r2
+	rsblt r2, r2, #0
+
+	// r3 = collisionDy
+	ldrh r3, [r0, #ENTITY_FIELD_YRAD]
+	ldrh r4, [r1, #ENTITY_FIELD_YRAD]
+	cmp r3, r4
+	movlt r3, r4
+
+	// return false if y does not collide
+	cmp r2, r3
+	bgt checkCollision_noCollision
+
+	// they must collide
+	mov r0, #1
+	pop {r4}
+	bx lr
+
+checkCollision_noCollision:
+	mov r0, #0
+	pop {r4}
+	bx lr
+// end checkCollision
+
+/*
 moveWithBounce: moves the entity according to its velocity and acceleration, bouncing when it hits a
-screen boundary. Returns whether a bounce occured
+wall. Loses all velocity when it hits a floor or ceiling. Returns whether a collision occured.
 
 moveWithBounce(entity: *Entity) -> bool {
 	let mut bounced = false;
@@ -229,7 +356,20 @@ moveWithBounce(entity: *Entity) -> bool {
 		entity.xVel += entity.xAccel;
 	}
 
-	// repeat the same for y
+	let (yMin, yMax) = (entity.yRad, PIX_HEIGHT - entity.yRad);
+	entity.yPos += entity.yVel;
+	if (entity.yPos <= yMin || entity.yPos >= yMax) {
+		if (entity.yPos <= yMin) {
+			entity.yPos = yMin;
+		}
+		if (entity.yPos >= yMax) {
+			entity.yPos = yMax;
+		}
+		bounced = true;
+		entity.yVel = 0;
+	} else {
+		entity.yVel += entity.yAccel;
+	}
 
 	return bounced;
 }
@@ -285,7 +425,7 @@ moveWithBounce_xDone:
 	b moveWithBounce_yDone
 moveWithBounce_bounceY:
 	mov r1, #1
-	rsb r7, r7, #0
+	mov r7, #0
 moveWithBounce_yDone:
 
 	// restore the fields in memory
