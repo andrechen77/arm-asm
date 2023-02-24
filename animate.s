@@ -103,13 +103,13 @@ bufferB:
 // tick: u32
 .align 4
 tick:
-	.word -100
+	.word 0
 
 // entities: Vec<Entity>
 .align 2
 entities:
 	// entities.len
-	.word 2
+	.word 5
 	// entities[0] // player
 	.long platformCarrierRight
 	.hword 160, 100
@@ -117,7 +117,22 @@ entities:
 	.byte 0, 10, 0, 1
 	// entities[1] // ball
 	.long simplePix
-	.hword 140, 40
+	.hword 76, 40
+	.hword 4, 4
+	.byte 2, 0, 0, 1
+	// entities[2] // ball
+	.long simplePix
+	.hword 154, 40
+	.hword 4, 4
+	.byte 2, 0, 0, 1
+	// entities[3] // ball
+	.long simplePix
+	.hword 232, 40
+	.hword 4, 4
+	.byte 2, 0, 0, 1
+	// entities[4] // ball
+	.long simplePix
+	.hword 310, 40
 	.hword 4, 4
 	.byte 2, 0, 0, 1
 
@@ -540,6 +555,7 @@ renderFrame(buffer: *PixBuffer, entities: *Vec<Entity>) {
 	}
 	clearTextBuffer();
 	drawNum(0, 0, tick);
+	drawStr(15, 10, "Pushbuttons: up/down/left/right. Keep the ball up!");
 }
 */
 renderFrame:
@@ -576,13 +592,24 @@ renderFrame_cond:
 	cmp r6, r7
 	blo renderFrame_body
 
-	// drawNum(0, 0, tick)
 	bl clearTextBuffer
+
+	// drawNum(0, 0, tick)
 	mov r0, #0
 	mov r1, #0
 	ldr r2, =tick
 	ldr r2, [r2]
 	bl drawNum
+
+	// drawStr(...)
+	mov r0, #15
+	mov r1, #10
+	ldr r2, =helpMessage
+	bl drawStr
+.data
+helpMessage:
+	.asciz "Pushbuttons: up/down/left/right. Keep the ball up!"
+.text
 
 	pop {r4-r7, pc}
 // end renderFrame
