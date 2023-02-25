@@ -34,6 +34,9 @@ Cannot handle pause key.
 updateKeyboardState() {
 	let static mut extended = false;
 	let static mut make = true; // assume it's a make scan code unless a break code is encountered
+	for keyState in keyboardState {
+		keyState.changed = false;
+	}
 	while REG_KEYBOARD_FIFO.bufferSize > 0 {
 		let scanCode = REG_KEYBOARD_FIFO.nextScanCode();
 		match scanCode {
@@ -75,11 +78,25 @@ updateKeyboardState:
 	// r1 = keyboardState
 	ldr r1, =keyboardState
 
+	// iterate over keyState
+	mov r2, #KEYBOARDSTATE_SIZE
+	b updateKeyboardState_clearChangedCond
+updateKeyboardState_clearChangedBody:
+
+	// keyboardState[r2].changed = false;
+	ldrb r0, [r1, r2]
+	bic r0, r0, #2
+	strb r0, [r1, r2]
+
+updateKeyboardState_clearChangedCond:
+	subs r2, r2, #1
+	bge updateKeyboardState_clearChangedBody
+
 	// r2 = REG_KEYBOARD_FIFO
 	ldr r2, =REG_KEYBOARD_FIFO
 
-	b updateKeyboardState_cond
-updateKeyboardState_body:
+	b updateKeyboardState_processCodesCond
+updateKeyboardState_processCodesBody:
 
 	// r3 = scanCode
 	ldrb r3, [r2]
@@ -91,7 +108,7 @@ updateKeyboardState_body:
 	beq updateKeyboardState_codeExtended
 
 	// r3 = keyIndex
-	ldrb r0, [r1, -#1]
+	ldrb r0, [r1, #-1]
 	cmp r0, #0
 	bne updateKeyboardState_checkExtendedCodes
 	cmp r3, #0x29
@@ -125,7 +142,7 @@ updateKeyboardState_keyIndexFound:
 
 	// r4 = keyboardState[keyIndex]
 	ldrb r4, [r1, r3]
-	ldrb r0, [r1, -#2]
+	ldrb r0, [r1, #-2]
 	add r4, r4, r0
 	add r4, r0, r4, lsl #1
 	and r4, r4, #0x3 // keep only the last two bits
@@ -133,27 +150,27 @@ updateKeyboardState_keyIndexFound:
 
 updateKeyboardState_resetFlags:
 	mov r0, #1 // hword representing both make and extended flags
-	strh r0, [r1, -#2]
+	strh r0, [r1, #-2]
 
-	b updateKeyboardState_cond
+	b updateKeyboardState_processCodesCond
 updateKeyboardState_codeBreak:
 
 	// make = false
 	mov r0, #0
-	strb r0, [r1, -#2]
+	strb r0, [r1, #-2]
 
-	b updateKeyboardState_cond
+	b updateKeyboardState_processCodesCond
 updateKeyboardState_codeExtended:
 
 	// extended = true
 	mov r0, #1
-	strb r0, [r1, -#1]
+	strb r0, [r1, #-1]
 
-updateKeyboardState_cond:
+updateKeyboardState_processCodesCond:
 	// r3 = bufferSize
 	ldrb r3, [r2, #2]
 	cmp r3, #0
-	bne updateKeyboardState_body
+	bne updateKeyboardState_processCodesBody
 
 	pop {r4}
 	bx lr
