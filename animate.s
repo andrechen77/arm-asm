@@ -1,28 +1,35 @@
 
 
 .data
+// types and global data here ======================================================================
 
-// controller interface
-.EQU REG_PIX_FRONTBUFFER, 0xff203020 // **PixBuffer
-.EQU REG_PIX_BACKBUFFER, 0xff203024 // **PixBuffer
-.EQU REG_PIX_STATUS, 0xff20302c
+// PS/2 FIFO address
+.EQU REG_PS2_FIFO, 0xff200108 // &Fifo
+.EQU FIFO_FIELD_NEXT, 0
+.EQU FIFO_FIELD_BUFFERSIZE, 2
 
-// text buffer address
-.EQU TEXT_BUFFER, 0xc9000000 // **TextBuffer
-
-// pushbutton state address
-.EQU PUSHBUTTON_STATE, 0xff200050
-
-/// PS/2 keyboard FIFO buffer address
-.EQU REG_KEYBOARD_FIFO, 0xff200108
+.align 1 // aligned because of a strh instruction in updateKeyboardState
+	// let mut make = true; // see updateKeyboard State
+	.byte 0x1
+	// let mut extended = false; // see updateKeyboardState
+	.byte 0x0
+// Use the keyboardState label to refer to these registers
+.EQU KEYBOARDSTATE_OFFSETFOR_MAKE, -2
+.EQU KEYBOARDSTATE_OFFSETFOR_EXTENDED, -1
 
 /*
 struct KeyState {
-	changed: bit,
 	pressed: bit,
+	changed: bit,
 }
 // each KeyState is one byte
 */
+.EQU KEYSTATE_BITINDEXOF_PRESSED, 0
+.EQU KEYSTATE_BITINDEXOF_CHANGED, 1
+
+// let mut keyboardState: &[keyState; 8] = staticallocation;
+keyboardState:
+	.skip KEYBOARDSTATE_SIZE
 .EQU KEYBOARDSTATE_INDEXOF_ESC, 0
 .EQU KEYBOARDSTATE_INDEXOF_SPACE, 1
 .EQU KEYBOARDSTATE_INDEXOF_ONE, 2
@@ -32,17 +39,6 @@ struct KeyState {
 .EQU KEYBOARDSTATE_INDEXOF_S, 6
 .EQU KEYBOARDSTATE_INDEXOF_D, 7
 .EQU KEYBOARDSTATE_SIZE, 8
-.align 1 // aligned because of a strh instruction in updateKeyboardState
-	.byte 0x1 // make flag; see updateKeyboardState
-	.byte 0x0 // extended flag; seeUpdateKeyboardState
-keyboardState:
-	.skip KEYBOARDSTATE_SIZE
-
-// screen metadata
-.EQU PIX_WIDTH, 320 // uint
-.EQU PIX_HEIGHT, 240 // uint
-.EQU TEXT_WIDTH, 80 // uint
-.EQU TEXT_HEIGHT, 60 // uint
 
 /*
 type TextBuffer = [[u8; TEXT_WIDTH]; TEXT_HEIGHT]; // not a regular array;
@@ -51,25 +47,47 @@ type TextBuffer = [[u8; TEXT_WIDTH]; TEXT_HEIGHT]; // not a regular array;
 // Give it a size of 0x2000 (1 << 13)
 }
 */
-.EQU TEXTBUFFER_ROWSHIFT, 0x80 // (1 << 7)
+.EQU TEXTBUFFER_ROWSHIFT, 1 << 7 // uint
+.EQU TEXT_WIDTH, 80 // uint
+.EQU TEXT_HEIGHT, 60 // uint
+
+// text buffer address
+.EQU TEXT_BUFFER, 0xc9000000 // &TextBuffer
 
 /*
 type PixBuffer = [[u16; PIX_WIDTH]; PIX_HEIGHT], // not a regular array;
 // the row index can take up 8 bits, the column index can take up 9 bits
 // Interpreting buffer as a pointer, the color at (r, c) is at `buffer + r << 10 + c << 1`.
-// Give it a size of 0x40000 (1 << 18)
+// Give it a size of 1 << 18.
 }
 */
-.EQU PIXBUFFER_SIZE, 0x40000 // (1 << 18)
-.EQU PIXBUFFER_ROWSHIFT, 0x400 // (1 << 10)
+.EQU PIX_WIDTH, 320 // uint
+.EQU PIX_HEIGHT, 240 // uint
+.EQU PIXBUFFER_SIZE, 1 << 18 // uint
+.EQU PIXBUFFER_ROWSHIFT, 1 << 10
 
-// bufferA: PixBuffer
-.align 2 // aligned to word because of str in clearVga
+/*
+struct PixStatus {
+	// irrelvant fields here
+	isSwapping: bit
+}
+// All we need to know is that it's a 32-bit register whose 0th bit holds the status of whether a
+// swap is in progress.
+*/
+.EQU PIXSTATUS_BITINDEXOF_ISSWAPPING, 0
+
+// VGA controller interface
+.EQU REG_PIX_FRONTBUFFER, 0xff203020 // &&PixBuffer
+.EQU REG_PIX_BACKBUFFER, 0xff203024 // &&PixBuffer
+.EQU REG_PIX_STATUS, 0xff20302c // &PixStatus
+
+// let bufferA: &PixBuffer = staticallocation;
+.align 2 // aligned to word because of str instruction in clearVga
 bufferA:
 	.skip PIXBUFFER_SIZE
 
-// bufferB: PixBuffer
-.align 2 // aligned to word because of str in clearVga
+// let bufferB: &PixBuffer = staticallocation;
+.align 2 // aligned to word because of str instruction in clearVga
 bufferB:
 	.skip PIXBUFFER_SIZE
 
@@ -134,16 +152,16 @@ entities:
 	.hword 4, 4
 	.byte 2, 0, 0, 1
 
-// tick: u32
+// let mut tick: u32 = 0;
 .align 4
 tick:
 	.word 0
 
-// functions
 .text
+// functions here ==================================================================================
 
 /*
-_start
+fn _start();
 */
 .global _start
 _start:
@@ -162,31 +180,25 @@ _start_uselessLoop:
 // end _start
 
 /*
-main
+fn main();
 */
 main:
 	push {r4, r5, lr}
 
 	ldr r4, =REG_PIX_BACKBUFFER
 
-	mov r8, #7 // xvel
-	mov r9, #0 // yvel
-	mov r10, #1 // yacc
-
 main_loop:
 	bl waitVsync
 
-	ldr r0, [r4] // r5 is a pointer to the backbuffer
+	ldr r0, [r4]
 	ldr r1, =entities
 	bl renderFrame
 
 	bl swapBuffers
 
-	// calculate next frame
 	bl advanceFrame
 
 	b main_loop
-
 
 	pop {r4, r5, lr}
 // end main
@@ -194,7 +206,7 @@ main_loop:
 /*
 advanceFrame: changes the game state to reflect the next frame
 
-advanceFrame() {
+fn advanceFrame() {
 	tick += 1;
 
 	movePlayer();
@@ -262,15 +274,15 @@ movePlayer() {
 */
 movePlayer:
 	// r0 = right, r1 = left, r2 = down, r3 = up
-	ldr r3, =PUSHBUTTON_STATE
-	ldr r3, [r3]
-	and r0, r3, #0x1
-	and r1, r3, #0x2
-	lsr r1, r1, #1
-	and r2, r3, #0x4
-	lsr r2, r2, #2
-	and r3, r3, #0x8
-	lsr r3, r3, #3
+	ldr r3, =keyboardState
+	ldrb r0, [r3, #KEYBOARDSTATE_INDEXOF_D]
+	and r0, r0, #0x1
+	ldrb r1, [r3, #KEYBOARDSTATE_INDEXOF_A]
+	and r1, r1, #0x1
+	ldrb r2, [r3, #KEYBOARDSTATE_INDEXOF_S]
+	and r2, r2, #0x1
+	ldrb r3, [r3, #KEYBOARDSTATE_INDEXOF_W]
+	and r3, r3, #0x1
 
 	// r0 = xMove, r1 = yMove
 	sub r0, r0, r1
@@ -294,8 +306,8 @@ movePlayer_changeCostumeLeft:
 	str r3, [r2, #SPRITE_FIELD_APPEARANCE]
 movePlayer_changeCostumeDone:
 
-	// player.xVel = xMove * 2; r3 = ???, r0 = ???
-	mov r3, #2
+	// player.xVel = xMove * 4; r3 = ???, r0 = ???
+	mov r3, #4
 	mul r0, r0, r3
 	strb r0, [r2, #ENTITY_FIELD_XVEL]
 
@@ -327,14 +339,14 @@ movePlayer_done:
 updateKeyboardState: updates the keyboardState struct to reflect the current state of the keyboard.
 Cannot handle pause key.
 
-updateKeyboardState() {
+fn updateKeyboardState() {
 	let static mut extended = false;
 	let static mut make = true; // assume it's a make scan code unless a break code is encountered
 	for keyState in keyboardState {
 		keyState.changed = false;
 	}
-	while REG_KEYBOARD_FIFO.bufferSize > 0 {
-		let scanCode = REG_KEYBOARD_FIFO.nextScanCode();
+	while REG_PS2_FIFO.bufferSize > 0 {
+		let scanCode = REG_PS2_FIFO.nextScanCode();
 		match scanCode {
 			0xf0 => make = false,
 			0xe0 => extended = true,
@@ -381,21 +393,21 @@ updateKeyboardState_clearChangedBody:
 
 	// keyboardState[r2].changed = false;
 	ldrb r0, [r1, r2]
-	bic r0, r0, #2
+	bic r0, r0, #(1 << KEYSTATE_BITINDEXOF_CHANGED)
 	strb r0, [r1, r2]
 
 updateKeyboardState_clearChangedCond:
 	subs r2, r2, #1
 	bge updateKeyboardState_clearChangedBody
 
-	// r2 = REG_KEYBOARD_FIFO
-	ldr r2, =REG_KEYBOARD_FIFO
+	// r2 = REG_PS2_FIFO
+	ldr r2, =REG_PS2_FIFO
 
 	b updateKeyboardState_processCodesCond
 updateKeyboardState_processCodesBody:
 
 	// r3 = scanCode
-	ldrb r3, [r2]
+	ldrb r3, [r2, #FIFO_FIELD_NEXT]
 
 	// outer match statement
 	cmp r3, #0xf0
@@ -404,7 +416,7 @@ updateKeyboardState_processCodesBody:
 	beq updateKeyboardState_codeExtended
 
 	// r3 = keyIndex
-	ldrb r0, [r1, #-1]
+	ldrb r0, [r1, #KEYBOARDSTATE_OFFSETFOR_EXTENDED]
 	cmp r0, #0
 	bne updateKeyboardState_checkExtendedCodes
 	cmp r3, #0x29
@@ -438,10 +450,10 @@ updateKeyboardState_keyIndexFound:
 
 	// r4 = keyboardState[keyIndex]
 	ldrb r4, [r1, r3]
-	ldrb r0, [r1, #-2]
+	ldrb r0, [r1, #KEYBOARDSTATE_OFFSETFOR_MAKE]
 	add r4, r4, r0
 	add r4, r0, r4, lsl #1
-	and r4, r4, #0x3 // keep only the last two bits
+	and r4, r4, #((1 << KEYSTATE_BITINDEXOF_CHANGED) + (1 << KEYSTATE_BITINDEXOF_PRESSED)) // discard useless bits
 	strb r4, [r1, r3]
 
 updateKeyboardState_resetFlags:
@@ -453,18 +465,18 @@ updateKeyboardState_codeBreak:
 
 	// make = false
 	mov r0, #0
-	strb r0, [r1, #-2]
+	strb r0, [r1, #KEYBOARDSTATE_OFFSETFOR_MAKE]
 
 	b updateKeyboardState_processCodesCond
 updateKeyboardState_codeExtended:
 
 	// extended = true
 	mov r0, #1
-	strb r0, [r1, #-1]
+	strb r0, [r1, #KEYBOARDSTATE_OFFSETFOR_EXTENDED]
 
 updateKeyboardState_processCodesCond:
 	// r3 = bufferSize
-	ldrb r3, [r2, #2]
+	ldrb r3, [r2, #FIFO_FIELD_BUFFERSIZE]
 	cmp r3, #0
 	bne updateKeyboardState_processCodesBody
 
@@ -702,7 +714,7 @@ moveWithBounce_yDone:
 // end moveWithBounce
 
 /*
-renderFrame(buffer: *PixBuffer, entities: *Vec<Entity>) {
+fn renderFrame(buffer: *PixBuffer, entities: *Vec<Entity>) {
 	clearVga();
 	for entity in entities {
 		bitBlit(buffer, entity.sprite, entity.sprite.xPos, entity.sprite.yPos);
@@ -762,14 +774,14 @@ renderFrame_cond:
 	bl drawStr
 .data
 helpMessage:
-	.asciz "Pushbuttons: up/down/left/right. Keep the ball up!"
+	.asciz "Use WASD to move. Keep the ball up!"
 .text
 
 	pop {r4-r7, pc}
 // end renderFrame
 
 /*
-setUpDoubleBuffer
+fn setUpDoubleBuffer();
 */
 setUpDoubleBuffer:
 	push {r4, lr}
@@ -806,16 +818,16 @@ waitVsync: blocks until vsync is finished
 waitVsync:
 	ldr r0, =REG_PIX_STATUS
 	ldr r0, [r0]
-	and r0, r0, #0x1
+	and r0, r0, #(1 << PIXSTATUS_BITINDEXOF_ISSWAPPING)
 	cmp r0, #0
 	bne waitVsync
 	bx lr
 // end waitVsync
 
 /*
-clearVga: Fills the video buffer with the specified color
+clearVga: fills the video buffer with the specified color
 
-clearVga(buffer: *PixBuffer, color: u16) {
+fn clearVga(buffer: *PixBuffer, color: u16) {
 	let color_pair: u32 = (color << 16) | color;
 	for row in 0..240 {
 		let buffer_row = buffer[row] as *u32; // expand size to write to 4-byte color pairs rather than 2-byte colors
@@ -826,6 +838,7 @@ clearVga(buffer: *PixBuffer, color: u16) {
 }
 */
 clearVga:
+	// r1 = color
 	// r0 = buffer_row (see outer loop's iteration expression)
 
 	// r1 = colorpair
@@ -859,7 +872,8 @@ clearVga_outerForCond:
 
 /*
 clearTextBuffer: Fills the text buffer with spaces (ASCII 32)
-clearTextBuffer() {
+
+fn clearTextBuffer() {
 	for row in 0..60 {
 		let buffer_row = TEXT_BUFFER[row];
 		for col in (0..80).step(4) {
@@ -906,8 +920,7 @@ clearTextBuffer_outerForCond:
 bitBlit: Draws the specified Pixmap into the VGA buffer, centered at the specified x and y
 coordinates. If the image goes past the VGA screen boundaries, pixels are not drawn.
 
-Pseudocode:
-bitBlit(buffer: *PixBuffer, p: *Pixmap, x: i32, y: i32) {
+fn bitBlit(buffer: *PixBuffer, p: *Pixmap, x: i32, y: i32) {
 	// convert center coordinates to top left corner coordinates
 	let y = y - p.height >> 1;
 	let x = x - p.width >> 1;
@@ -1039,7 +1052,7 @@ bitBlit_outerCond:
 /*
 drawStr: draws a null-terminated string into the character buffer
 
-drawStr(x: uint, y: uint, str: *char) {
+fn drawStr(x: uint, y: uint, str: *char) {
 	let bufferRow: [u8; TEXT_WIDTH] = TEXT_BUFFER[y];
 	let mut col = x;
 	let mut p = str;
@@ -1082,7 +1095,7 @@ drawStr_end:
 /*
 drawNum: draws a signed integer into the character buffer
 
-drawNum(x: uint, y: uint, num: i32) {
+fn drawNum(x: uint, y: uint, num: i32) {
 	let mut remainingDigits = num;
 	let mut buffer: [u8; 12]; // max int is 10 decimal digits, plus two for null terminator and minus
 	let mut = 11; // index to the first element of the array
@@ -1181,18 +1194,12 @@ drawNum_print:
 // end drawNum
 
 /*
-divTenRemSmall
-
-Divides an unsigned number by 10, returning its quotient and remainder. Will not work for numbers
-larger than about 6.7e8.
+divTenRemSmall: divides an unsigned number by 10, returning its quotient and remainder. Will not
+work for numbers larger than about 6.7e8.
 Algorithm for dividing by 10 credited to:
 Vowels, R. A. (1992). "Division by 10". Australian Computer Journal. 24 (3): 81–85.
 
-Parameters:
-	r0: int dividend
-Returns:
-	r0: int quotient
-	r1: int remainder
+fn divTenRemSmall(dividend: i32) -> (quotient: i32, remainder: i32);
 */
 divTenRemSmall:
 	mov r1, r0 // save the divident for later
@@ -1214,29 +1221,22 @@ divTenRemSmall:
 // end divTenRemSmall
 
 /*
-divTenRem
+divTenRem: divides an unsigned number by 10, returning its quotient and remainder. Will work for any
+unsigned 32-bit number, unlike divTenRemSmall.
 
-Divides an unsigned number by 10, returning its quotient and remainder. Will work for any unsigned
-32-bit number, unlike divTenRemSmall.
-
-Parameters:
-	r0: int dividend
-Returns:
-	r0: int quotient
-	r1: int remainder
-
-Pseudocode:
-if (dividend <= 0x10000000) { // 28 bits is safely below the maximum valid input for divTenRemSmall
-	return divTenRemSmall(dividend);
+fn divTenRem(dividend: i32) -> (quotient: i32, remainder: i32){
+	if (dividend <= 0x10000000) { // 28 bits is safely below the maximum valid input for divTenRemSmall
+		return divTenRemSmall(dividend);
+	}
+	int msn = dividend & 0xf0000000; // "most significant nybble"
+	int rest = dividend - msn;
+	msn >>= 4;
+	(int msnQuot, int msnRem) = divTenRemSmall(msn);
+	msnQuot <<= 4;
+	rest += msnRem << 4;
+	(int restQuot, int restRem) = divTenRemSmall(rest);
+	return (msnQuot + restQuot, restRem);
 }
-int msn = dividend & 0xf0000000; // "most significant nybble"
-int rest = dividend - msn;
-msn >>= 4;
-(int msnQuot, int msnRem) = divTenRemSmall(msn);
-msnQuot <<= 4;
-rest += msnRem << 4;
-(int restQuot, int restRem) = divTenRemSmall(rest);
-return (msnQuot + restQuot, restRem);
 */
 divTenRem:
 	// r0: dividend
@@ -1259,8 +1259,8 @@ divTenRem:
 	pop {r4, r5, pc}
 // end divTenRem
 
-// assets
 .data
+// game assets and data here =======================================================================
 
 /*
 struct Pixmap {
