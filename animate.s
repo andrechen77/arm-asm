@@ -38,7 +38,11 @@ keyboardState:
 .EQU KEYBOARDSTATE_INDEXOF_A, 5
 .EQU KEYBOARDSTATE_INDEXOF_S, 6
 .EQU KEYBOARDSTATE_INDEXOF_D, 7
-.EQU KEYBOARDSTATE_SIZE, 8
+.EQU KEYBOARDSTATE_INDEXOF_I, 8
+.EQU KEYBOARDSTATE_INDEXOF_J, 9
+.EQU KEYBOARDSTATE_INDEXOF_K, 10
+.EQU KEYBOARDSTATE_INDEXOF_L, 11
+.EQU KEYBOARDSTATE_SIZE, 12
 
 /*
 type TextBuffer = [[u8; TEXT_WIDTH]; TEXT_HEIGHT]; // not a regular array;
@@ -193,7 +197,7 @@ fn advanceFrame() {
 	tick += 1;
 
 	updateKeyboardState();
-	// TODO processPlayerInput();
+	processPlayerInput();
 	// TODO move every entity in the game based on its velocity
 	processCollisions();
 }
@@ -214,17 +218,17 @@ advanceFrame:
 	bl moveEntities
 
 	// processCollisions();
-	bl processCollisions
 
 	pop {r4-r6, pc}
 // end advanceFrame
 
 /*
-processPlayerInput: changes the ship's velocity and appearance based on WASD states
+processPlayerInput: changes the ship's velocity and direction based on WASD and IJKL states
 
 processPlayerInput() {
+	ship.direction = (keyboardState.L.pressed as i32) - (keyboardState.J.pressed as i32);
+
 	let xMove = (keyboardState.D.pressed as i32) - (keyboardState.A.pressed as i32);
-	ship.direction = xMove;
 	if xMove != 0 {
 		ship.xVel += xMove * 2;
 		if ship.xVel > ship.maxSpeed {
@@ -236,23 +240,34 @@ processPlayerInput() {
 		ship.xVel -= sign(ship.xVel);
 	}
 
-	// same thing for y, except without changing ship.direction
+	// same thing for y
+
+	// TODO add firing bullets
 }
 */
 processPlayerInput:
+	push {r4}
+
 	// r0 = ship
 	ldr r0, =ship
 
-	// r1 = xMove
-	ldr r2, =keyboardState
-	ldrb r1, [r2, #KEYBOARDSTATE_INDEXOF_D]
+	// r4 = keyboardState
+	ldr r4, =keyboardState
+
+	// ship.direction = (keyboardState.L.pressed as i32) - (keyboardState.J.pressed as i32);
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_L]
 	and r1, r1, #0x1
-	ldrb r2, [r2, #KEYBOARDSTATE_INDEXOF_A]
+	ldrb r2, [r4, #KEYBOARDSTATE_INDEXOF_J]
 	and r2, r2, #0x1
 	sub r1, r1, r2
-
-	// ship.direction = xMove;
 	strb r1, [r0, #SHIP_FIELD_DIRECTION]
+
+	// r1 = xMove
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_D]
+	and r1, r1, #0x1
+	ldrb r2, [r4, #KEYBOARDSTATE_INDEXOF_A]
+	and r2, r2, #0x1
+	sub r1, r1, r2
 
 	// r2 = ship.xVel
 	ldrsb r2, [r0, #ENTITY_FIELD_XVEL]
@@ -289,10 +304,9 @@ processPlayerInput_xVelCalcsDone:
 	strb r2, [r0, #ENTITY_FIELD_XVEL]
 
 	// r1 = yMove
-	ldr r2, =keyboardState
-	ldrb r1, [r2, #KEYBOARDSTATE_INDEXOF_S]
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_S]
 	and r1, r1, #0x1
-	ldrb r2, [r2, #KEYBOARDSTATE_INDEXOF_W]
+	ldrb r2, [r4, #KEYBOARDSTATE_INDEXOF_W]
 	and r2, r2, #0x1
 	sub r1, r1, r2
 
@@ -330,6 +344,7 @@ processPlayerInput_yVelCalcsDone:
 	// restore ship.yVel to memory
 	strb r2, [r0, #ENTITY_FIELD_YVEL]
 
+	pop {r4}
 	bx lr
 // end processPlayerInput
 
@@ -386,6 +401,10 @@ fn updateKeyboardState() {
 						0x1c => KEYBOARDSTATE_INDEXOF_A,
 						0x1b => KEYBOARDSTATE_INDEXOF_S,
 						0x23 => KEYBOARDSTATE_INDEXOF_D,
+						0x43 => KEYBOARDSTATE_INDEXOF_I,
+						0x3b => KEYBOARDSTATE_INDEXOF_J,
+						0x42 => KEYBOARDSTATE_INDEXOF_K,
+						0x4b => KEYBOARDSTATE_INDEXOF_L,
 						_ => goto resetFlags;
 					}
 				};
@@ -463,6 +482,18 @@ updateKeyboardState_processCodesBody:
 	beq updateKeyboardState_keyIndexFound
 	cmp r3, #0x23
 	moveq r3, #KEYBOARDSTATE_INDEXOF_D
+	beq updateKeyboardState_keyIndexFound
+	cmp r3, #0x43
+	moveq r3, #KEYBOARDSTATE_INDEXOF_I
+	beq updateKeyboardState_keyIndexFound
+	cmp r3, #0x3b
+	moveq r3, #KEYBOARDSTATE_INDEXOF_J
+	beq updateKeyboardState_keyIndexFound
+	cmp r3, #0x42
+	moveq r3, #KEYBOARDSTATE_INDEXOF_K
+	beq updateKeyboardState_keyIndexFound
+	cmp r3, #0x4b
+	moveq r3, #KEYBOARDSTATE_INDEXOF_L
 	beq updateKeyboardState_keyIndexFound
 	b updateKeyboardState_resetFlags
 updateKeyboardState_checkExtendedCodes:
