@@ -361,13 +361,25 @@ fn moveEntities() {
 */
 moveEntities:
 	ldr r0, =ship
+
 	ldrh r1, [r0, #ENTITY_FIELD_XPOS]
 	ldrsb r2, [r0, #ENTITY_FIELD_XVEL]
-	add r1, r1, r2
+	adds r1, r1, r2
+	movlt r1, #0
+	blt moveEntities_doneCalculatingShipX
+	cmp r1, #PIX_WIDTH
+	movgt r1, #PIX_WIDTH
+moveEntities_doneCalculatingShipX:
 	strh r1, [r0, #ENTITY_FIELD_XPOS]
+
 	ldrh r1, [r0, #ENTITY_FIELD_YPOS]
 	ldrsb r2, [r0, #ENTITY_FIELD_YVEL]
-	add r1, r1, r2
+	adds r1, r1, r2
+	movlt r1, #0
+	blt moveEntities_doneCalculatingShipY
+	cmp r1, #PIX_HEIGHT
+	movgt r1, #PIX_HEIGHT
+moveEntities_doneCalculatingShipY:
 	strh r1, [r0, #ENTITY_FIELD_YPOS]
 // end moveEntities
 
@@ -541,7 +553,7 @@ fn renderFrame(buffer: *PixBuffer) {
 	clearVga();
 
 	// draw player
-	bitBlit(buffer, ) // TODO you were here
+	bitBlit(buffer, (*shipSkinArray)[ship.direction + 1], ship.xPos, ship.yPos)
 	// TODO draw all the entities
 	for entity in entities {
 		bitBlit(buffer, entity.sprite, entity.sprite.xPos, entity.sprite.yPos);
