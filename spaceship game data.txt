@@ -1,0 +1,75 @@
+spaceship game data
+
+let fireCooldown = 100;
+
+let mut cash: u8;
+
+struct Entity {
+	xPos: i16,
+	yPos: i16,
+	xVel: i8,
+	yVel: i8,
+}
+
+struct Particle extends Entity {
+	color: u16,
+}
+
+// spaceship has its anchor in the middle
+struct Ship extends Entity {
+	direction: i8, // either -1, 0, 1
+	health: i8,
+	maxHealth: i8,
+	bulletSpeed: i8,
+	bulletDamage: i8,
+	currentFireCooldown: i8,
+	fireRate: i8,
+	maxSpeed: i8,
+}
+
+// asteroids have their anchor at the top left corner
+struct Asteroid extends Entity {
+	appearance: &Pixmap,
+	diameter: u16,
+	health: i8,
+}
+
+struct Bullet extends Entity {
+	appearance: &Pixmap,
+	damage: i8,
+}
+
+struct Item extends Entity {
+	appearance: &Pixmap,
+	type: enum { healthKit, mineral, invulnerability },
+}
+
+struct Explosion extends Entity {
+	appearances: &[Pixmap],
+	frame: u8,
+}
+
+struct Pixmap {
+	width: u16,
+	height: u16,
+	anchorX: u16,
+	anchorY: u16,
+	transparency: u16,
+}
+
+Spaceship
+Vec<Asteroid>
+Vec<Bullet>
+Vec<Item>
+Vec<Particle>
+Vec<Animation>
+Vec<Explosion>
+
+check collisions between:
+	spaceship and items
+	spaceship and asteroids
+	asteroids and asteroids
+	asteroids and bullets
+
+a.left < b.right
+b.left < a.right
