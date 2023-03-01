@@ -58,12 +58,12 @@ struct Pixmap {
 }
 
 Spaceship
-Vec<Asteroid>
-Vec<Bullet>
-Vec<Item>
-Vec<Particle>
-Vec<Animation>
-Vec<Explosion>
+CircleBuff<Asteroid>
+CircleBuff<Bullet>
+CircleBuff<Item>
+CircleBuff<Particle>
+CircleBuff<Animation>
+CircleBuff<Explosion>
 
 check collisions between:
 	spaceship and items
@@ -73,3 +73,27 @@ check collisions between:
 
 a.left < b.right
 b.left < a.right
+
+struct CircleBuff<T> {
+	elementSize: uint,
+	capacity: uint,
+	begin: uint,
+	end: uint,
+	data: [T; len], // variable length array
+}
+
+fn inc(iterator: &uint, capacity: uint) {
+	*iterator += 1;
+	if *iterator == capacity {
+		*iterator = 0;
+	}
+}
+
+fn forEach<T>(buff: &CircleBuff<T>, operation: fn (&T) -> bool) {
+	while buff.begin < buff.end && isDead(buff.data[buff.begin]) {
+		buff.begin += 1; // using circular increments
+	}
+	for i in buff.begin..buff.end { // using circular increments
+		operation(buff[i]);
+	}
+}

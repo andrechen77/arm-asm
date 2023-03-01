@@ -138,7 +138,48 @@ ship:
 	.hword 160, 120
 	.byte 0, 0
 	.byte 0
-	.byte 10, 10, 10, 10, 0, 4, 5
+	.byte 10, 10, 5, 10, 0, 20, 5
+
+/*
+struct Bullet extends Entity {
+	appearance: &Pixmap,
+	damage: i8,
+}
+*/
+.EQU BULLET_FIELD_DAMAGE, 6 // out of order so that appearance is properly aligned
+.EQU BULLET_FIELD_APPEARANCE, 8
+.EQU BULLET_SIZE, 12
+
+/*
+struct Csb<T> {
+	elementSize: u32,
+	capacity: u32,
+	begin: u32,
+	end: u32,
+	data: [T; capacity], // variable length array
+}
+// Csb stands for "circular sparse buffer." The buffer is circular; an iterator that is incremented to
+// equal the capacity will wrap around to the beginning of the array. The "sparse" comes from the
+// fact that during iteration, some elements are skipped depending on if the word at byte 8 is 0.
+// Therefore, T must be a type with at least size 12.
+// Because of how the circular buffer works, the actual capacity is buff.capacity - 1.
+// A full-capacity buffer would have the begin and end iterators at the same position, but that
+// would actually indicate an empty buffer.
+*/
+.EQU CSB_FIELD_ELEMENTSIZE, 0
+.EQU CSB_FIELD_CAPACITY, 4
+.EQU CSB_FIELD_BEGIN, 8
+.EQU CSB_FIELD_END, 12
+.EQU CSB_FIELD_DATA, 16
+
+// let bulletBuff: CircleBuff<Bullet> = staticallocation;
+.align 2
+bulletBuff:
+	.word BULLET_SIZE
+	.word 128
+	.word 0
+	.word 0
+	.skip 128 * BULLET_SIZE
 
 // let mut tick: u32 = 0;
 .align 4
@@ -240,13 +281,15 @@ processPlayerInput() {
 		ship.xVel -= sign(ship.xVel);
 	}
 
-	// same thing for y
+	if keyboardState.I.changed == true && keyboardState.I.pressed == true {
+		spawnBullet(ship);
+	}
 
 	// TODO add firing bullets
 }
 */
 processPlayerInput:
-	push {r4}
+	push {r4, lr}
 
 	// r0 = ship
 	ldr r0, =ship
@@ -344,8 +387,13 @@ processPlayerInput_yVelCalcsDone:
 	// restore ship.yVel to memory
 	strb r2, [r0, #ENTITY_FIELD_YVEL]
 
-	pop {r4}
-	bx lr
+	// fire bullet
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_I]
+	cmp r1, #3
+	// r0 is already the ship address
+	bleq spawnBullet
+
+	pop {r4, pc}
 // end processPlayerInput
 
 /*
@@ -353,35 +401,268 @@ moveEntities: changes every entity's position based on their current velocity. T
 from moving off the screen.
 
 fn moveEntities() {
-	ship.xPos += ship.xVel;
-	ship.yPos += ship.yVel;
+	moveEntityBounded(ship)
 
 	// TODO move all the other entities in the game
+	forEach(bulletBuff, moveEntity);
 }
 */
 moveEntities:
+	push {lr}
+
 	ldr r0, =ship
+	bl moveEntityBounded
+
+	ldr r0, =bulletBuff
+	ldr r1, =moveEntityWithVoid
+	bl forEach
+
+	pop {pc}
+// end moveEntities
+
+/*
+moveEntityWithVoid: updates the specified Entity's position based on its current velocity. Also
+kills the entity (sets the word at byte 8 to 0) if the entity is too far off the screen. This implies
+that the entity must have a size of at least 12.
+
+fn moveEntityWithVoid(entity: &Entity) {
+	let tolerance = 32;
+	entity.xPos += entity.xVel;
+	if entity.xPos > PIX_WIDTH + tolerance || entity.xPos < -tolerance {
+		isDead(entity) = true; // set the word at byte 8 to 0
+		return;
+	}
+
+	entity.yPos += entity.yVel;
+	if entity.yPos > PIX_HEIGHT + tolerance || entity.yPos < -tolerance {
+		isDead(entity) = true; // set the word at byte 8 to 0
+	}
+}
+*/
+.EQU MOVEENTITYWITHVOID_TOLERANCE, 32
+moveEntityWithVoid:
+	// r0 = entity
+
+	// r1 = entity.xPos
+	ldrh r1, [r0, #ENTITY_FIELD_XPOS]
+	ldrsb r2, [r0, #ENTITY_FIELD_XVEL]
+	add r1, r1, r2
+	strh r1, [r0, #ENTITY_FIELD_XPOS]
+
+	cmp r1, #(PIX_WIDTH + MOVEENTITYWITHVOID_TOLERANCE)
+	bge moveEntityWithVoid_kill
+	cmp r1, #-MOVEENTITYWITHVOID_TOLERANCE
+	blt moveEntityWithVoid_kill
+
+	ldrh r1, [r0, #ENTITY_FIELD_YPOS]
+	ldrsb r2, [r0, #ENTITY_FIELD_YVEL]
+	add r1, r1, r2
+	strh r1, [r0, #ENTITY_FIELD_YPOS]
+
+	cmp r1, #(PIX_HEIGHT + MOVEENTITYWITHVOID_TOLERANCE)
+	bge moveEntityWithVoid_kill
+	cmp r1, #-MOVEENTITYWITHVOID_TOLERANCE
+	blt moveEntityWithVoid_kill
+
+	b moveEntityWithVoid_done
+moveEntityWithVoid_kill:
+	mov r1, #0
+	str r1, [r0, #8]
+
+moveEntityWithVoid_done:
+	bx lr
+// end moveEntity
+
+/*
+moveEntityBounded: updates the specified Entity's position based on its current velocity. Also
+prevents the entity from moving off the screen
+
+fn moveEntityBounded(entity: &Entity) {
+	entity.xPos = max(0, min(PIX_WIDTH, entity.xVel));
+	entity.yPos = max(0, min(PIX_HEIGHT, entity.yVel));
+}
+*/
+moveEntityBounded:
+	// r0 = entity
 
 	ldrh r1, [r0, #ENTITY_FIELD_XPOS]
 	ldrsb r2, [r0, #ENTITY_FIELD_XVEL]
 	adds r1, r1, r2
 	movlt r1, #0
-	blt moveEntities_doneCalculatingShipX
+	blt moveEntityBounded_doneCalculatingX
 	cmp r1, #PIX_WIDTH
 	movgt r1, #PIX_WIDTH
-moveEntities_doneCalculatingShipX:
+moveEntityBounded_doneCalculatingX:
 	strh r1, [r0, #ENTITY_FIELD_XPOS]
 
 	ldrh r1, [r0, #ENTITY_FIELD_YPOS]
 	ldrsb r2, [r0, #ENTITY_FIELD_YVEL]
 	adds r1, r1, r2
 	movlt r1, #0
-	blt moveEntities_doneCalculatingShipY
+	blt moveEntityBounded_doneCalculatingY
 	cmp r1, #PIX_HEIGHT
 	movgt r1, #PIX_HEIGHT
-moveEntities_doneCalculatingShipY:
+moveEntityBounded_doneCalculatingY:
 	strh r1, [r0, #ENTITY_FIELD_YPOS]
-// end moveEntities
+
+	bx lr
+// end moveEntityBounded
+
+/*
+forEach: takes a Csb and applies the specified procedure to all elements that aren't skipped.
+Also passes arg1 and arg2 to the procedure, if the procedure accepts them.
+Also updates Csb.begin to reflect the first non-skipped element (or the end iterator, if there are
+no non-skipped elements).
+
+fn forEach(buff: &mut Csb<T>, procedure: fn (&mut T, Arg1, Arg2) -> void, arg1: Arg1, arg2: Arg2) {
+	while buff.begin != buff.end && isDead(buff[buff.begin]) {
+		buff.begin += 1; // using circular increments
+	}
+	for i in buff.begin..buff.end { // using circular increments
+		if !isDead(buff[i]) {
+			procedure(buff[i]);
+		}
+	}
+}
+*/
+forEach:
+	push {r4-r11, lr}
+
+	// r0 = buff
+	// r1 = procedure
+
+	// r9 = procedure, r10 = arg1, r11 = arg2
+	mov r9, r1
+	mov r10, r2
+	mov r11, r3
+
+	// r4 = &buff.data, r5 = buff.elementSize, r6 = buff.begin, r7, = buff.end, r8 = buff.capacity
+	ldr r5, [r0, #CSB_FIELD_ELEMENTSIZE]
+	ldr r6, [r0, #CSB_FIELD_BEGIN]
+	ldr r7, [r0, #CSB_FIELD_END]
+	ldr r8, [r0, #CSB_FIELD_CAPACITY]
+	add r4, r0, #(CSB_FIELD_DATA + 8)
+	// r4 = buff.data + 8 bytes temporarily to make it easier to access the word at byte 8
+	// It goes back to normal after the while loop
+
+	// r0 = word at byte 8 of buff.data[buff.begin]
+	b forEach_skipDeadCond
+forEach_skipDeadBody:
+	add r6, r6, #1
+	cmp r6, r8
+	movge r6, #0
+forEach_skipDeadCond:
+	cmp r6, r7
+	beq forEach_skipDeadDone
+	mla r0, r6, r5, r4
+	ldr r0, [r0]
+	cmp r0, #0
+	beq forEach_skipDeadBody
+forEach_skipDeadDone:
+	// restore r4 = &buff.data
+	sub r4, r4, #8
+
+	// restore buff.begin to memory
+	str r6, [r4, #(CSB_FIELD_BEGIN - CSB_FIELD_DATA)]
+
+	// r6 = i
+	b forEach_operateCond
+forEach_operateBody:
+
+	mla r0, r6, r5, r4 // r0 = &buff[i]
+	ldr r1, [r0, #8] // r1 = word at byte 8 of buff[i]
+	cmp r1, #0
+	beq forEach_skipElement
+	mov r1, r10
+	mov r2, r11
+	blx r9
+forEach_skipElement:
+
+	add r6, r6, #1
+	cmp r6, r8
+	movge r6, #0
+forEach_operateCond:
+	cmp r6, r7
+	bne forEach_operateBody
+
+	pop {r4-r11, pc}
+// end forEach
+
+/*
+addSpace: allocates an additional space in the specified Csb and returns a pointer to the space.
+The pointer points to uninitialized memory.
+WARNING: assumes that there is enough space in the buffer to do this.
+
+fn addSpace(buff: &mut Csb<T>) -> &mut T {
+	let oldEnd = buff.end;
+	buff.end += 1; // circular increment
+	return &buff.data[oldEnd];
+}
+*/
+addSpace:
+	// r0 = buff.elementSize, r1 = &buff.data, r2 = oldEnd, r3 = buff.capacity,
+	ldr r2, [r0, #CSB_FIELD_END]
+	ldr r3, [r0, #CSB_FIELD_CAPACITY]
+	add r1, r0, #CSB_FIELD_DATA
+	ldr r0, [r1, #(CSB_FIELD_ELEMENTSIZE - CSB_FIELD_DATA)]
+
+	// r0 = buff.data[oldEnd]
+	mla r0, r2, r0, r1
+
+	// r2 = buff.end
+	add r2, r2, #1
+	cmp r2, r3
+	movge r2, #0
+	str r2, [r1, #(CSB_FIELD_END - CSB_FIELD_DATA)]
+
+	bx lr
+// end addSpace
+
+/*
+spawnBullet(ship: &Ship) {
+	let bullet: &mut Bullet = addSpace(&mut bulletBuff);
+	bullet.xPos = ship.xPos;
+	bullet.yPos = ship.yPos;
+	bullet.xVel = ship.direction * ship.bulletSpeed;
+	bullet.yVel = -ship.bulletSpeed;
+	bullet.appearance = bulletSkinArray[ship.direction + 1];
+	bullet.damage = ship.bulletDamage;
+}
+*/
+spawnBullet:
+	push {r4-r8, lr}
+	// r0 = ship
+
+	// r4 = ship.xPos, r5 = ship.yPos, r6 = ship.direction, r7 = ship.bulletDamage, r8 = ship.bulletSpeed
+	ldrsh r4, [r0, #ENTITY_FIELD_XPOS]
+	ldrsh r5, [r0, #ENTITY_FIELD_YPOS]
+	ldrsb r6, [r0, #SHIP_FIELD_DIRECTION]
+	ldrsb r7, [r0, #SHIP_FIELD_BULLETDAMAGE]
+	ldrsb r8, [r0, #SHIP_FIELD_BULLETSPEED]
+
+	// r0 = bullet
+	ldr r0, =bulletBuff
+	bl addSpace
+
+	strh r4, [r0, #ENTITY_FIELD_XPOS]
+
+	strh r5, [r0, #ENTITY_FIELD_YPOS]
+
+	mul r1, r6, r8
+	strb r1, [r0, #ENTITY_FIELD_XVEL]
+
+	rsb r1, r8, #0
+	strb r1, [r0, #ENTITY_FIELD_YVEL]
+
+	strb r7, [r0, #BULLET_FIELD_DAMAGE]
+
+	ldr r1, =bulletSkinArray
+	add r2, r6, #1
+	ldr r1, [r1, r2, lsl #2]
+	str r1, [r0, #BULLET_FIELD_APPEARANCE]
+
+	pop {r4-r8, pc}
+// end spawnBullet
 
 /*
 updateKeyboardState: updates the keyboardState struct to reflect the current state of the keyboard.
@@ -549,15 +830,15 @@ updateKeyboardState_processCodesCond:
 // end updateKeyboardState
 
 /*
-fn renderFrame(buffer: *PixBuffer) {
+fn renderFrame(buffer: &PixBuffer) {
 	clearVga();
+
+	// TODO draw all the entities
+	forEach(bulletBuff, renderBullet, buffer);
 
 	// draw player
 	bitBlit(buffer, (*shipSkinArray)[ship.direction + 1], ship.xPos, ship.yPos)
-	// TODO draw all the entities
-	for entity in entities {
-		bitBlit(buffer, entity.sprite, entity.sprite.xPos, entity.sprite.yPos);
-	}
+
 	clearTextBuffer();
 	drawNum(0, 0, tick);
 	drawStr(15, 10, "Pushbuttons: up/down/left/right. Keep the ball up!");
@@ -574,6 +855,12 @@ renderFrame:
 	// r0 is already the buffer address
 	ldr r1, =0x0
 	bl clearVga
+
+	// forEach(bulletBuff, renderBullet, buffer);
+	ldr r0, =bulletBuff
+	ldr r1, =renderBullet
+	mov r2, r4
+	bl forEach
 
 	// draw Player
 	mov r0, r4
@@ -607,6 +894,24 @@ helpMessage:
 
 	pop {r4-r7, pc}
 // end renderFrame
+
+/*
+fn renderBullet(bullet: &Bullet, buffer: &PixBuffer) {
+	bitBlit(buffer, bullet.appearance, bullet.xPos, bullet.yPos)
+}
+*/
+renderBullet:
+	push {lr}
+
+	mov r3, r0
+	mov r0, r1
+	ldr r1, [r3, #BULLET_FIELD_APPEARANCE]
+	ldrsh r2, [r3, #ENTITY_FIELD_XPOS]
+	ldrsh r3, [r3, #ENTITY_FIELD_YPOS]
+	bl bitBlit
+
+	pop {pc}
+// end renderBullet
 
 /*
 fn setUpDoubleBuffer();
@@ -1430,3 +1735,44 @@ shipSkinRight:
 	.hword 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0, 0x0
 	.hword 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0
 	.hword 0x20, 0x0, 0x0, 0x0
+
+.align 2
+// let mut bulletSkinArray: [&Pixmap; 3];
+bulletSkinArray:
+	.long bulletSkinLeft
+	.long bulletSkinForward
+	.long bulletSkinRight
+
+.align 1
+bulletSkinLeft:
+	.hword 8, 8, 0xfd58
+	.hword 0x7eff, 0x7f1f, 0x6f1f, 0x86fe, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0x7f1f, 0x2496
+	.hword 0x24d8, 0x2c95, 0x9ebb, 0xfd58, 0xfd58, 0xfd58, 0x771f, 0x1cb7, 0x14f9, 0x14b7
+	.hword 0x8edd, 0xfd58, 0xfd58, 0xfd58, 0x86de, 0x2c75, 0x24f8, 0x24d8, 0x3475, 0x96dc
+	.hword 0xfd58, 0xfd58, 0xfd58, 0x9e7b, 0x8ebe, 0x3456, 0x3497, 0x86be, 0xfd58, 0xfd58
+	.hword 0xfd58, 0xfd58, 0xfd58, 0x9e9d, 0x8ebf, 0x4435, 0xa67b, 0xfd58, 0xfd58, 0xfd58
+	.hword 0xfd58, 0xfd58, 0xfd58, 0xa65b, 0xae9b, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
+	.hword 0xfd58, 0xfd58, 0xfd58, 0xae7a
+
+
+.align 1
+bulletSkinForward:
+	.hword 8, 8, 0xfd58
+	.hword 0xfd58, 0xfd58, 0xfd58, 0x8ede, 0x8ede, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
+	.hword 0x86bd, 0x34d7, 0x2c96, 0x8ebe, 0xfd58, 0xfd58, 0xfd58, 0x9ebc, 0x24d8, 0xcfa
+	.hword 0xcda, 0x2497, 0x9e9c, 0xfd58, 0xfd58, 0x9e9c, 0x1cb8, 0x51b, 0xd1b, 0x24b9
+	.hword 0x965b, 0xfd58, 0xfd58, 0xfd58, 0x7f1f, 0x14d9, 0x1cd9, 0x7edf, 0xfd58, 0xfd58
+	.hword 0xfd58, 0xfd58, 0x8ede, 0x34b6, 0x2c55, 0x96bd, 0xfd58, 0xfd58, 0xfd58, 0xfd58
+	.hword 0xfd58, 0x4c33, 0xa69c, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xa67b
+	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58
+
+.align 1
+bulletSkinRight:
+	.hword 8, 8, 0xfd58
+	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0x86fe, 0x6f1f, 0x7f1f, 0x7eff, 0xfd58, 0xfd58
+	.hword 0xfd58, 0x9ebb, 0x2c95, 0x24d8, 0x2496, 0x7f1f, 0xfd58, 0xfd58, 0xfd58, 0x8edd
+	.hword 0x14b7, 0x14f9, 0x1cb7, 0x771f, 0xfd58, 0xfd58, 0x96dc, 0x3475, 0x24d8, 0x24f8
+	.hword 0x2c75, 0x86de, 0xfd58, 0xfd58, 0x86be, 0x3497, 0x3456, 0x8ebe, 0x9e7b, 0xfd58
+	.hword 0xfd58, 0xa67b, 0x4435, 0x8ebf, 0x9e9d, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xae9b
+	.hword 0xa65b, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xae7a, 0xfd58, 0xfd58, 0xfd58
+	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58
