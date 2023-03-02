@@ -570,7 +570,11 @@ fn maybeCollideBulletAsteroid(asteroid: &mut Asteroid, bullet: &mut Bullet) {
 		bullet.yPos >= asteroid.yPos &&
 		bullet.yPos >= asteroid.yPos + asteroid.diameter
 	{
-		// do nothing for now
+		asteroid.health -= bullet.damage;
+		if asteroid.health <= 0 {
+			asteroid.lifetime = 0;
+		}
+		bullet.lifetime = 0;
 	}
 }
 */
@@ -606,7 +610,15 @@ maybeCollideBulletAsteroid:
 
 	// now we know there must be a collision
 
-	mov r0, r0
+	// r2 = asteroid.health, r3 = bullet.damage, r4 = 0
+	ldrsb r2, [r0, #ASTEROID_FIELD_HEALTH]
+	ldrsb r3, [r1, #BULLET_FIELD_DAMAGE]
+	mov r4, #0
+
+	subs r2, r2, r3
+	strleb r4, [r0, #ENTITY_FIELD_LIFETIME]
+	strb r2, [r0, #ASTEROID_FIELD_HEALTH]
+	strb r4, [r1, #ENTITY_FIELD_LIFETIME]
 
 maybeCollideBulletAsteroid_noCollision:
 
@@ -839,7 +851,7 @@ fn spawnAsteroid() {
 	asteroid.yVel = 4;
 	asteroid.costume = shipSkinForward;
 	asteroid.diameter = 64;
-	asteroid.health = 100;
+	asteroid.health = 25;
 }
 */
 spawnAsteroid:
@@ -871,7 +883,7 @@ spawnAsteroid:
 	mov r5, #64
 	strh r5, [r4, #ASTEROID_FIELD_DIAMETER]
 
-	mov r5, #100
+	mov r5, #25
 	strb r5, [r4, #ASTEROID_FIELD_HEALTH]
 
 	pop {r4-r5, pc}
