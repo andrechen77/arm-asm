@@ -97,17 +97,19 @@ bufferB:
 
 /*
 struct Entity {
+	lifetime: i16,
 	xPos: i16,
 	yPos: i16,
 	xVel: i8,
 	yVel: i8,
 }
 */
-.EQU ENTITY_FIELD_XPOS, 0
-.EQU ENTITY_FIELD_YPOS, 2
-.EQU ENTITY_FIELD_XVEL, 4
-.EQU ENTITY_FIELD_YVEL, 5
-.EQU ENTITY_SIZE, 6
+.EQU ENTITY_FIELD_LIFETIME, 0
+.EQU ENTITY_FIELD_XPOS, 2
+.EQU ENTITY_FIELD_YPOS, 4
+.EQU ENTITY_FIELD_XVEL, 6
+.EQU ENTITY_FIELD_YVEL, 7
+.EQU ENTITY_SIZE, 8
 
 /*
 struct Ship extends Entity {
@@ -122,19 +124,20 @@ struct Ship extends Entity {
 }
 // ships have their anchor in the center
 */
-.EQU SHIP_FIELD_DIRECTION, 6
-.EQU SHIP_FIELD_HEALTH, 7
-.EQU SHIP_FIELD_MAXHEALTH, 8
-.EQU SHIP_FIELD_BULLETSPEED, 9
-.EQU SHIP_FIELD_BULLETDAMAGE, 10
-.EQU SHIP_FIELD_CURRENTFIRECOOLDOWN, 11
-.EQU SHIP_FIELD_FIRERATE, 12
-.EQU SHIP_FIELD_MAXSPEED, 13
-.EQU SHIP_SIZE, 14
+.EQU SHIP_FIELD_DIRECTION, 8
+.EQU SHIP_FIELD_HEALTH, 9
+.EQU SHIP_FIELD_MAXHEALTH, 10
+.EQU SHIP_FIELD_BULLETSPEED, 11
+.EQU SHIP_FIELD_BULLETDAMAGE, 12
+.EQU SHIP_FIELD_CURRENTFIRECOOLDOWN, 13
+.EQU SHIP_FIELD_FIRERATE, 14
+.EQU SHIP_FIELD_MAXSPEED, 15
+.EQU SHIP_SIZE, 16
 
 // let ship: Ship = staticallocation;
 .align 1
 ship:
+	.hword 0
 	.hword 160, 120
 	.byte 0, 0
 	.byte 0
@@ -146,9 +149,9 @@ struct Bullet extends Entity {
 	damage: i8,
 }
 */
-.EQU BULLET_FIELD_DAMAGE, 6 // out of order so that appearance is properly aligned
 .EQU BULLET_FIELD_APPEARANCE, 8
-.EQU BULLET_SIZE, 12
+.EQU BULLET_FIELD_DAMAGE, 12
+.EQU BULLET_SIZE, 16 // add padding to align subsequent bullets
 
 /*
 struct Csb<T> {
@@ -160,8 +163,8 @@ struct Csb<T> {
 }
 // Csb stands for "circular sparse buffer." The buffer is circular; an iterator that is incremented to
 // equal the capacity will wrap around to the beginning of the array. The "sparse" comes from the
-// fact that during iteration, some elements are skipped depending on if the word at byte 8 is 0.
-// Therefore, T must be a type with at least size 12.
+// fact that during iteration, some elements are skipped (considered "dead") depending on if first
+// halfword is 0. Therefore, T must be a type with at least size 2.
 // Because of how the circular buffer works, the actual capacity is buff.capacity - 1.
 // A full-capacity buffer would have the begin and end iterators at the same position, but that
 // would actually indicate an empty buffer.
@@ -422,60 +425,44 @@ moveEntities:
 
 /*
 moveEntityWithVoid: updates the specified Entity's position based on its current velocity. Also
-kills the entity (sets the word at byte 8 to 0) if the entity is too far off the screen. This implies
-that the entity must have a size of at least 12.
+decreases the lifetime of the entity by 1.
 
 fn moveEntityWithVoid(entity: &Entity) {
-	let tolerance = 32;
-	entity.xPos += entity.xVel;
-	if entity.xPos > PIX_WIDTH + tolerance || entity.xPos < -tolerance {
-		isDead(entity) = true; // set the word at byte 8 to 0
-		return;
+	if entity.lifetime > 0 {
+		entity.lifetime -= 1;
 	}
 
+	entity.xPos += entity.xVel;
 	entity.yPos += entity.yVel;
-	if entity.yPos > PIX_HEIGHT + tolerance || entity.yPos < -tolerance {
-		isDead(entity) = true; // set the word at byte 8 to 0
-	}
 }
 */
 .EQU MOVEENTITYWITHVOID_TOLERANCE, 32
 moveEntityWithVoid:
 	// r0 = entity
 
-	// r1 = entity.xPos
+	ldrsh r1, [r0, #ENTITY_FIELD_LIFETIME]
+	cmp r1, #0
+	ble moveEntityWithVoid_noDecreaseLifetime
+	sub r1, r1, #1
+	strh r1, [r0, #ENTITY_FIELD_LIFETIME]
+moveEntityWithVoid_noDecreaseLifetime:
+
 	ldrh r1, [r0, #ENTITY_FIELD_XPOS]
 	ldrsb r2, [r0, #ENTITY_FIELD_XVEL]
 	add r1, r1, r2
 	strh r1, [r0, #ENTITY_FIELD_XPOS]
-
-	cmp r1, #(PIX_WIDTH + MOVEENTITYWITHVOID_TOLERANCE)
-	bge moveEntityWithVoid_kill
-	cmp r1, #-MOVEENTITYWITHVOID_TOLERANCE
-	blt moveEntityWithVoid_kill
 
 	ldrh r1, [r0, #ENTITY_FIELD_YPOS]
 	ldrsb r2, [r0, #ENTITY_FIELD_YVEL]
 	add r1, r1, r2
 	strh r1, [r0, #ENTITY_FIELD_YPOS]
 
-	cmp r1, #(PIX_HEIGHT + MOVEENTITYWITHVOID_TOLERANCE)
-	bge moveEntityWithVoid_kill
-	cmp r1, #-MOVEENTITYWITHVOID_TOLERANCE
-	blt moveEntityWithVoid_kill
-
-	b moveEntityWithVoid_done
-moveEntityWithVoid_kill:
-	mov r1, #0
-	str r1, [r0, #8]
-
-moveEntityWithVoid_done:
 	bx lr
 // end moveEntity
 
 /*
 moveEntityBounded: updates the specified Entity's position based on its current velocity. Also
-prevents the entity from moving off the screen
+prevents the entity from moving off the screen.
 
 fn moveEntityBounded(entity: &Entity) {
 	entity.xPos = max(0, min(PIX_WIDTH, entity.xVel));
@@ -509,10 +496,10 @@ moveEntityBounded_doneCalculatingY:
 // end moveEntityBounded
 
 /*
-forEach: takes a Csb and applies the specified procedure to all elements that aren't skipped.
+forEach: takes a Csb and applies the specified procedure to all elements that aren't dead.
 Also passes arg1 and arg2 to the procedure, if the procedure accepts them.
-Also updates Csb.begin to reflect the first non-skipped element (or the end iterator, if there are
-no non-skipped elements).
+Also updates Csb.begin to reflect the first non-dead element (or the end iterator, if there are
+no non-dead elements).
 
 fn forEach(buff: &mut Csb<T>, procedure: fn (&mut T, Arg1, Arg2) -> void, arg1: Arg1, arg2: Arg2) {
 	while buff.begin != buff.end && isDead(buff[buff.begin]) {
@@ -541,11 +528,9 @@ forEach:
 	ldr r6, [r0, #CSB_FIELD_BEGIN]
 	ldr r7, [r0, #CSB_FIELD_END]
 	ldr r8, [r0, #CSB_FIELD_CAPACITY]
-	add r4, r0, #(CSB_FIELD_DATA + 8)
-	// r4 = buff.data + 8 bytes temporarily to make it easier to access the word at byte 8
-	// It goes back to normal after the while loop
+	add r4, r0, #CSB_FIELD_DATA
 
-	// r0 = word at byte 8 of buff.data[buff.begin]
+	// r0 = first halfword of buff.data[buff.begin]
 	b forEach_skipDeadCond
 forEach_skipDeadBody:
 	add r6, r6, #1
@@ -555,12 +540,10 @@ forEach_skipDeadCond:
 	cmp r6, r7
 	beq forEach_skipDeadDone
 	mla r0, r6, r5, r4
-	ldr r0, [r0]
+	ldrh r0, [r0]
 	cmp r0, #0
 	beq forEach_skipDeadBody
 forEach_skipDeadDone:
-	// restore r4 = &buff.data
-	sub r4, r4, #8
 
 	// restore buff.begin to memory
 	str r6, [r4, #(CSB_FIELD_BEGIN - CSB_FIELD_DATA)]
@@ -570,7 +553,7 @@ forEach_skipDeadDone:
 forEach_operateBody:
 
 	mla r0, r6, r5, r4 // r0 = &buff[i]
-	ldr r1, [r0, #8] // r1 = word at byte 8 of buff[i]
+	ldrh r1, [r0] // r1 = first halfword of buff[i]
 	cmp r1, #0
 	beq forEach_skipElement
 	mov r1, r10
@@ -621,6 +604,7 @@ addSpace:
 /*
 spawnBullet(ship: &Ship) {
 	let bullet: &mut Bullet = addSpace(&mut bulletBuff);
+	bullet.lifetime = 30;
 	bullet.xPos = ship.xPos;
 	bullet.yPos = ship.yPos;
 	bullet.xVel = ship.direction * ship.bulletSpeed;
@@ -643,6 +627,9 @@ spawnBullet:
 	// r0 = bullet
 	ldr r0, =bulletBuff
 	bl addSpace
+
+	mov r1, #30
+	strh r1, [r0, #ENTITY_FIELD_LIFETIME]
 
 	strh r4, [r0, #ENTITY_FIELD_XPOS]
 
