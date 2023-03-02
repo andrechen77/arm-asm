@@ -68,7 +68,7 @@ type PixBuffer = [[u16; PIX_WIDTH]; PIX_HEIGHT], // not a regular array;
 .EQU PIX_WIDTH, 320 // uint
 .EQU PIX_HEIGHT, 240 // uint
 .EQU PIXBUFFER_SIZE, 1 << 18 // uint
-.EQU PIXBUFFER_ROWSHIFT, 1 << 10
+.EQU PIXBUFFER_ROWSHIFT, 10
 
 /*
 struct PixStatus {
@@ -995,7 +995,7 @@ clearVga_innerForCond:
 	blo clearVga_innerForBody
 
 	add r2, r2, #1
-	add r0, r0, #PIXBUFFER_ROWSHIFT // update pointer to new row
+	add r0, r0, #(1 << PIXBUFFER_ROWSHIFT) // update pointer to new row
 clearVga_outerForCond:
 	cmp r2, #PIX_HEIGHT
 	blo clearVga_outerForBody
@@ -1055,8 +1055,8 @@ coordinates. If the image goes past the VGA screen boundaries, pixels are not dr
 
 fn bitBlit(buffer: *PixBuffer, p: *Pixmap, x: i32, y: i32) {
 	// convert center coordinates to top left corner coordinates
-	let y = y - p.height >> 1;
-	let x = x - p.width >> 1;
+	let y = y - p.anchorY;
+	let x = x - p.anchorX;
 
 	// find the portion of the pixmap to draw
 	let start_row = max(0, -y);
@@ -1083,45 +1083,35 @@ bitBlit:
 	// r2 = x
 	// r3 = y
 
+	// r2 = x, r3 = y
+	ldrh r4, [r1, #PIXMAP_FIELD_ANCHORX]
+	sub r2, r2, r4
+	ldrh r4, [r1, #PIXMAP_FIELD_ANCHERY]
+	sub r3, r3, r4
+
+	// r6 = start_col
+	rsbs r6, r2, #0
+	movle r6, #0
+
+	// r7 = start_row
+	rsbs r7, r3, #0
+	movle r7, #0
+
 	// r4 = p.width
 	ldrh r4, [r1, #PIXMAP_FIELD_WIDTH]
 
 	// r5 = p.height
 	ldrh r5, [r1, #PIXMAP_FIELD_HEIGHT]
 
-	// r2 = x
-	sub r2, r2, r4, lsr #1
-
-	// r3 = y
-	sub r3, r3, r5, lsr #1
-
-	// r6 = start_col
-	rsb r6, r2, #0
-	cmp r6, #0
-	bgt bitBlit_1
-	mov r6, #0
-bitBlit_1:
-
-	// r7 = start_row
-	rsb r7, r3, #0
-	cmp r7, #0
-	bgt bitBlit_0
-	mov r7, #0
-bitBlit_0:
-
 	// r8 = end_col
 	rsb r8, r2, #PIX_WIDTH
 	cmp r8, r4
-	blt bitBlit_3
-	mov r8, r4
-bitBlit_3:
+	movge r8, r4
 
 	// r9 = end_row
 	rsb r9, r3, #PIX_HEIGHT
 	cmp r9, r5
-	blt bitBlit_2
-	mov r9, r5
-bitBlit_2:
+	movge r9, r5
 
 	// From here on, horizontal coordinates are double what they are in the pseudocode, for ease of
 	// fetching the halfword values.
@@ -1131,8 +1121,8 @@ bitBlit_2:
 	// skip doubling r6 because it gets reset anyway
 
 	// r0 = PIX_BUFFER[y + start_row] + x
-	add r0, r0, r3, lsl #10
-	add r0, r0, r7, lsl #10
+	add r0, r0, r3, lsl #PIXBUFFER_ROWSHIFT
+	add r0, r0, r7, lsl #PIXBUFFER_ROWSHIFT
 	add r0, r0, r2
 
 	// r3 = p.transparency
@@ -1173,7 +1163,7 @@ bitBlit_innerCond:
 	cmp r6, r8
 	blt bitBlit_innerBody
 
-	add r0, r0, #0x400 // update pointer to new row (0x400 is 1 << 10)
+	add r0, r0, #(1 << PIXBUFFER_ROWSHIFT) // update pointer to new row
 	add r7, r7, #1
 bitBlit_outerCond:
 	cmp r7, r9
@@ -1405,8 +1395,10 @@ struct Pixmap {
 */
 .EQU PIXMAP_FIELD_WIDTH, 0
 .EQU PIXMAP_FIELD_HEIGHT, 2
-.EQU PIXMAP_FIELD_TRANSPARENCY, 4
-.EQU PIXMAP_FIELD_PIXELDATA, 6
+.EQU PIXMAP_FIELD_ANCHORX, 4
+.EQU PIXMAP_FIELD_ANCHERY, 6
+.EQU PIXMAP_FIELD_TRANSPARENCY, 8
+.EQU PIXMAP_FIELD_PIXELDATA, 10
 
 .align 2
 // let mut shipSkinArray: [&Pixmap; 3];
@@ -1417,7 +1409,7 @@ shipSkinArray:
 
 .align 1
 shipSkinForward:
-	.hword 32, 32, 0xfd58
+	.hword 32, 32, 16, 16, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
@@ -1524,7 +1516,7 @@ shipSkinForward:
 
 .align 1
 shipSkinLeft:
-	.hword 32, 32, 0xfd58
+	.hword 32, 32, 16, 16, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
@@ -1631,7 +1623,7 @@ shipSkinLeft:
 
 .align 1
 shipSkinRight:
-		.hword 32, 32, 0xfd58
+	.hword 32, 32, 16, 16, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
@@ -1745,7 +1737,7 @@ bulletSkinArray:
 
 .align 1
 bulletSkinLeft:
-	.hword 8, 8, 0xfd58
+	.hword 8, 8, 2, 2, 0xfd58
 	.hword 0x7eff, 0x7f1f, 0x6f1f, 0x86fe, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0x7f1f, 0x2496
 	.hword 0x24d8, 0x2c95, 0x9ebb, 0xfd58, 0xfd58, 0xfd58, 0x771f, 0x1cb7, 0x14f9, 0x14b7
 	.hword 0x8edd, 0xfd58, 0xfd58, 0xfd58, 0x86de, 0x2c75, 0x24f8, 0x24d8, 0x3475, 0x96dc
@@ -1757,7 +1749,7 @@ bulletSkinLeft:
 
 .align 1
 bulletSkinForward:
-	.hword 8, 8, 0xfd58
+	.hword 8, 8, 4, 3, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0x8ede, 0x8ede, 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0xfd58
 	.hword 0x86bd, 0x34d7, 0x2c96, 0x8ebe, 0xfd58, 0xfd58, 0xfd58, 0x9ebc, 0x24d8, 0xcfa
 	.hword 0xcda, 0x2497, 0x9e9c, 0xfd58, 0xfd58, 0x9e9c, 0x1cb8, 0x51b, 0xd1b, 0x24b9
@@ -1768,7 +1760,7 @@ bulletSkinForward:
 
 .align 1
 bulletSkinRight:
-	.hword 8, 8, 0xfd58
+	.hword 8, 8, 6, 2, 0xfd58
 	.hword 0xfd58, 0xfd58, 0xfd58, 0xfd58, 0x86fe, 0x6f1f, 0x7f1f, 0x7eff, 0xfd58, 0xfd58
 	.hword 0xfd58, 0x9ebb, 0x2c95, 0x24d8, 0x2496, 0x7f1f, 0xfd58, 0xfd58, 0xfd58, 0x8edd
 	.hword 0x14b7, 0x14f9, 0x1cb7, 0x771f, 0xfd58, 0xfd58, 0x96dc, 0x3475, 0x24d8, 0x24f8
