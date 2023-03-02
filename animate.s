@@ -289,7 +289,7 @@ advanceFrame:
 
 	bl moveEntities
 
-	// processCollisions();
+	bl processCollisions
 
 	ldr r0, =bulletBuff
 	bl trimCsb
@@ -540,6 +540,81 @@ moveEntityBounded_doneCalculatingY:
 // end moveEntityBounded
 
 /*
+processCollisions: checks for collisions between:
+	the ship and asteroids
+	the ship and items
+	asteroids and asteroids
+	asteroids and bullets
+
+fn processCollisions() {
+	forEachPair(bulletBuff, asteroidBuff, maybeCollideBulletAsteroid);
+	// TODO all the other collisions
+}
+*/
+processCollisions:
+	push {lr}
+
+	ldr r0, =bulletBuff
+	ldr r1, =asteroidBuff
+	ldr r2, =maybeCollideBulletAsteroid
+	bl forEachPair
+
+	pop {pc}
+// end processCollisions
+
+/*
+fn maybeCollideBulletAsteroid(asteroid: &mut Asteroid, bullet: &mut Bullet) {
+	if
+		bullet.xPos >= asteroid.xPos &&
+		bullet.xPos <= asteroid.xPos + asteroid.diameter &&
+		bullet.yPos >= asteroid.yPos &&
+		bullet.yPos >= asteroid.yPos + asteroid.diameter
+	{
+		// do nothing for now
+	}
+}
+*/
+maybeCollideBulletAsteroid:
+	push {r4}
+
+	// r0 = asteroid, r1 = bullet
+
+	// r4 = asteroid.diameter
+	ldrh r4, [r0, #ASTEROID_FIELD_DIAMETER]
+
+	// r2 = bullet.xPos, r3 = asteroid.xPos
+	ldrsh r2, [r1, #ENTITY_FIELD_XPOS]
+	ldrsh r3, [r0, #ENTITY_FIELD_XPOS]
+	cmp r2, r3
+	blt maybeCollideBulletAsteroid_noCollision
+
+	// r3 = asteroid.xPos + asteroid.diameter
+	add r3, r3, r4
+	cmp r2, r3
+	bgt maybeCollideBulletAsteroid_noCollision
+
+	// r2 = bullet.yPos, r3 = asteroid.yPos
+	ldrsh r2, [r1, #ENTITY_FIELD_YPOS]
+	ldrsh r3, [r0, #ENTITY_FIELD_YPOS]
+	cmp r2, r3
+	blt maybeCollideBulletAsteroid_noCollision
+
+	// r3 = asteroid.yPos + asteroid.diameter
+	add r3, r3, r4
+	cmp r2, r3
+	bgt maybeCollideBulletAsteroid_noCollision
+
+	// now we know there must be a collision
+
+	mov r0, r0
+
+maybeCollideBulletAsteroid_noCollision:
+
+	pop {r4}
+	bx lr
+// end maybeCollideBulletAsteroid
+
+/*
 trimCsb: updates the begin index to reflect the index of the first non-dead element (or the end
 iterator, if there are no non-dead elements)
 
@@ -637,6 +712,44 @@ forEach_cond:
 // end forEach
 
 /*
+forEachPair: takes two Csbs and applies the specified procedure to all pairs of non-dead elements.
+buffA is the outer iteration; buffB is the inner iteration. Notice that A and B are switched in
+the procedure.
+
+fn forEachPair(buffA: &mut Csb<A>, buffB: &mut Csb<B>, procedure: fn (&mut B, &mut A) -> void) {
+	fn forEachPair_helper(a: &mut A, procedure: fn (&mut B, &mut A) -> void, buffB: &mut Csb<B>) {
+		forEach(buffB, procedure, a);
+	}
+	forEach(buffA, forEachPair_helper, procedure, buffB);
+}
+*/
+forEachPair_helper:
+	push {lr}
+
+	// r0 = a, r1 = procedure, r2 = buffB
+
+	// forEach(buffB, procedure, a);
+	mov r3, r0
+	mov r0, r2
+	mov r2, r3
+	bl forEach
+
+	pop {pc}
+// end forEachPair_helper
+forEachPair:
+	push {lr}
+
+	// r0 = buffA, r1 = buffB, r2 = procedure
+
+	// forEach(buffA, forEachPair_helper, procedure, buffB);
+	mov r3, r1
+	ldr r1, =forEachPair_helper
+	bl forEach
+
+	pop {pc}
+// end forEachPair
+
+/*
 addSpace: allocates an additional space in the specified Csb and returns a pointer to the space.
 The pointer points to uninitialized memory.
 WARNING: assumes that there is enough space in the buffer to do this.
@@ -725,7 +838,7 @@ fn spawnAsteroid() {
 	asteroid.xVel = -2;
 	asteroid.yVel = 4;
 	asteroid.costume = shipSkinForward;
-	asteroid.diameter = 16;
+	asteroid.diameter = 64;
 	asteroid.health = 100;
 }
 */
@@ -755,7 +868,7 @@ spawnAsteroid:
 	ldr r5, =asteroidSkin
 	str r5, [r4, #COSTUMEDENTITY_FIELD_COSTUME]
 
-	mov r5, #16
+	mov r5, #64
 	strh r5, [r4, #ASTEROID_FIELD_DIAMETER]
 
 	mov r5, #100
@@ -957,14 +1070,14 @@ renderFrame:
 	ldr r1, =0x0
 	bl clearVga
 
-	// forEach(bulletBuff, renderCostumedEntity, buffer);
-	ldr r0, =bulletBuff
+	// forEach(asteroidBuff, renderCostumedEntity, buffer);
+	ldr r0, =asteroidBuff
 	ldr r1, =renderCostumedEntity
 	mov r2, r4
 	bl forEach
 
-	// forEach(asteroidBuff, renderCostumedEntity, buffer);
-	ldr r0, =asteroidBuff
+	// forEach(bulletBuff, renderCostumedEntity, buffer);
+	ldr r0, =bulletBuff
 	ldr r1, =renderCostumedEntity
 	mov r2, r4
 	bl forEach
@@ -1878,7 +1991,7 @@ bulletSkinRight:
 
 .align 1
 asteroidSkin:
-	.hword 64, 64, 32, 32, 0xffff
+	.hword 64, 64, 0, 0, 0xffff
 	.hword 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff
 	.hword 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff
 	.hword 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff, 0xffff
