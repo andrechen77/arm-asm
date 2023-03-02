@@ -5,6 +5,7 @@ let fireCooldown = 100;
 let mut cash: u8;
 
 struct Entity {
+	lifetime: i16,
 	xPos: i16,
 	yPos: i16,
 	xVel: i8,
