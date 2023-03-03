@@ -146,7 +146,7 @@ ship:
 	.hword 160, 120
 	.byte 0, 0
 	.byte 0
-	.byte 10, 10, 5, 10, 0, 20, 5
+	.byte 100, 100, 4, 3, 100, 5, 3
 
 /*
 struct CostumedEntity {
@@ -563,9 +563,9 @@ processCollisions:
 	ldr r2, =maybeCollideBulletAsteroid
 	bl forEachPair
 
-	// ldr r0, =asteroidBuff
-	//ldr r1, =maybeCollideShipAsteroid
-	// bl forEach
+	ldr r0, =asteroidBuff
+	ldr r1, =maybeCollideShipAsteroid
+	bl forEach
 
 	pop {pc}
 // end processCollisions
@@ -628,23 +628,13 @@ maybeCollideBulletAsteroid_noCollision:
 
 /*
 fn maybeCollideShipAsteroid(asteroid: &mut Asteroid) {
-	let (shipBoxLeft, shipBoxRight, shipBoxTop, shipBoxBottom) = if ship.direction == 0 {
-		(ship.xPos - SHIP_RADIUS_STRAIGHT, ship.xPos + SHIP_RADIUS_STRAIGHT, ship.yPos + SHIP_RADIUS_STRAIGHT, ship.yPos)
-	} else {
-		(ship.xPos - SHIP_RADIUS_DIAGONAL, ship.xPos + SHIP_RADIUS_DIAGONAL, ship.yPos + SHIP_RADIUS_DIAGONAL, ship.yPos - SHIP_RADIUS_DIAGONAL)
-	}
-
-	if
-		shipBoxRight >= asteroid.xPos &&
-		shipBoxLeft <= asteroid.xPos + asteroid.diameter &&
-		shipBoxBottom >= asteroid.yPos &&
-		shipBoxTop <= asteroid.yPos + asteroid.diameter
-	{
-		// do nothing
+	let distanceSquare = square(ship.xPos - asteroid.xPos) + square(ship.yPos - asteroid.yPos);
+	if distanceSquare <= square(asteroid.radius) + square(SHIP_RADIUS) {
+		ship.health -= asteroid.health;
+		asteroid.lifetime = 0;
 	}
 }
 */
-/*
 maybeCollideShipAsteroid:
 	push {r4-r5, lr}
 
@@ -653,51 +643,47 @@ maybeCollideShipAsteroid:
 	// r1 = ship
 	ldr r1, =ship
 
-	// r2 = shipRadius, r3 = asteroid.diameter
-	ldrsb r2, [r1, #SHIP_FIELD_DIRECTION]
-	cmp r2, #0
-	movne r2, #SHIP_RADIUS_DIAGONAL
-	moveq r2, #SHIP_RADIUS_STRAIGHT
-	ldrb r3, [r0, #ASTEROID_FIELD_DIAMETER]
+	// r2 = square(ship.xPos - asteroid.xPos)
+	ldrsh r2, [r1, #ENTITY_FIELD_XPOS]
+	ldrsh r3, [r0, #ENTITY_FIELD_XPOS]
+	sub r2, r2, r3
+	mul r2, r2, r2
 
-	// r4 = shipBoxRight, r5 = asteroid.xPos
-	ldrsh r4, [r1, #ENTITY_FIELD_XPOS]
-	add r4, r4, r2
-	ldrsh r5, [r0, #ENTITY_FIELD_XPOS]
+	// r3 = square(ship.yPos - asteroid.yPos)
+	ldrsh r3, [r1, #ENTITY_FIELD_YPOS]
+	ldrsh r4, [r0, #ENTITY_FIELD_YPOS]
+	sub r3, r3, r4
+	mul r3, r3, r3
 
-	cmp r4, r5
-	blt maybeCollideShipAsteroid_noCollision
+	// r2 = distanceSquare
+	add r2, r2, r3
 
-	// r4 = shipBoxLeft, r5 = asteroid.xPos + asteroid.diameter
-	sub r4, r4, r2, lsl #1
-	add r5, r5, r3
-
-	cmp r4, r5
-	bgt maybeCollideShipAsteroid_noCollision
-
-	// r4 = shipBoxBottom, r5 = asteroid.yPos
-	ldrsh r4, [r1, #ENTITY_FIELD_YPOS]
-	add r4, r4, r2
-	ldrsh r5, [r0, #ENTITY_FIELD_YPOS]
-
-	cmp r4, r5
-	blt maybeCollideShipAsteroid_noCollision
-
-	// r4 = shipBoxTop, r5 = asteroid.yPos + asteroid.diameter
-	sub r4, r4, r2, lsl #1
-	add r5, r5, r3
-
-	cmp r4, r5
+	// skip if out of range
+	ldrh r3, [r0, #ASTEROID_FIELD_RADIUS]
+	mul r3, r3, r3
+	mov r4, #SHIP_RADIUS
+	mul r4, r4, r4
+	add r3, r3, r4
+	cmp r2, r3
 	bgt maybeCollideShipAsteroid_noCollision
 
 	// there must be a collision
+
+	// ship.health -= asteroid.health; r2 = ??? r3 = ???
+	ldrsb r2, [r1, #SHIP_FIELD_HEALTH]
+	ldrsb r3, [r0, #ASTEROID_FIELD_HEALTH]
+	sub r2, r2, r3
+	strb r2, [r1, #SHIP_FIELD_HEALTH]
+
+	// asteroid.lifetime = 0;
+	mov r2, #0
+	strh r2, [r0, #ENTITY_FIELD_LIFETIME]
 
 	mov r0, r0
 
 maybeCollideShipAsteroid_noCollision:
 	pop {r4-r5, pc}
 // end maybeCollideShipAsteroid
-*/
 
 /*
 checkAsteroidCollision: determines whether a point is inside an asteroid
