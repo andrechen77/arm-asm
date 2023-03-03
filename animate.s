@@ -156,7 +156,7 @@ ship:
 	.hword 160, 120
 	.byte 0, 0
 	.byte 0
-	.byte 100, 100, 4, 3, 100, 5, 3
+	.byte 100, 100, 12, 50, 0, 30, 10
 
 /*
 struct CostumedEntity {
@@ -228,6 +228,23 @@ asteroidBuff:
 tick:
 	.word 0
 
+/*
+enum GameState {
+	StartScreen,
+	InGame,
+	Paused,
+	DeathScreen,
+}
+*/
+.EQU GAMESTATE_VARIANT_DEATHSCREEN, 0
+.EQU GAMESTATE_VARIANT_STARTSCREEN, 1
+.EQU GAMESTATE_VARIANT_INGAME, 2
+.EQU GAMESTATE_VARIANT_PAUSED, 3
+
+// let mut gameState: GameState = StartScreen;
+gameState:
+	.byte GAMESTATE_VARIANT_STARTSCREEN
+
 .text
 // functions here ==================================================================================
 
@@ -259,14 +276,15 @@ main:
 	ldr r4, =REG_PIX_BACKBUFFER
 
 main_loop:
-	bl waitVsync
-
-	ldr r0, [r4]
-	bl renderFrame
-
-	bl swapBuffers
+	bl updateKeyboardState
 
 	bl advanceFrame
+
+	// render frame
+	bl waitVsync
+	ldr r0, [r4]
+	bl renderFrame
+	bl swapBuffers
 
 	b main_loop
 
@@ -277,26 +295,17 @@ main_loop:
 advanceFrame: changes the game state to reflect the next frame
 
 fn advanceFrame() {
-	tick += 1;
-
-	updateKeyboardState();
 	processPlayerInput();
 	// TODO move every entity in the game based on its velocity
 	processCollisions();
 	trimCsb(bulletBuff);
 	trimCsb(asteroidBuff);
+
+	tick += 1;
 }
 */
 advanceFrame:
 	push {r4-r6, lr}
-
-	// advance tick
-	ldr r0, =tick
-	ldr r1, [r0]
-	add r1, r1, #1
-	str r1, [r0]
-
-	bl updateKeyboardState
 
 	bl processPlayerInput
 
@@ -308,6 +317,12 @@ advanceFrame:
 	bl trimCsb
 	ldr r0, =asteroidBuff
 	bl trimCsb
+
+	// advance tick
+	ldr r0, =tick
+	ldr r1, [r0]
+	add r1, r1, #1
+	str r1, [r0]
 
 	pop {r4-r6, pc}
 // end advanceFrame
@@ -334,8 +349,15 @@ processPlayerInput() {
 		spawnBullet(ship);
 	}
 
-	if keyboardState.space.changed && keyboardState.space.pressed {
+	if keyboardState.K.changed && keyboardState.K.pressed {
 		spawnAsteroid();
+	}
+
+	if
+		(gameState == GameState::DeathScreen || gameState == GameState::StartScreen) &&
+		keyboardState.space.changed && keyboardState.space.pressed
+	{
+		startGame();
 	}
 }
 */
@@ -445,13 +467,90 @@ processPlayerInput_yVelCalcsDone:
 	bleq spawnBullet
 
 	// spawn asteroid
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_K]
+	cmp r1, #3
+	bleq spawnAsteroid
+
+	// start game
 	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_SPACE]
 	cmp r1, #3
-	mov r0, r5
-	bleq spawnAsteroid
+	bne processPlayerInput_noStart
+	ldr r1, =gameState
+	ldrb r1, [r1]
+	cmp r1, #GAMESTATE_VARIANT_STARTSCREEN
+	bhi processPlayerInput_noStart
+	bl startGame
+processPlayerInput_noStart:
 
 	pop {r4-r5, pc}
 // end processPlayerInput
+
+/*
+fn startGame() {
+	gameState = GameState::InGame;
+
+	if ship.lifetime == 0 {
+		ship.xPos = 160;
+		ship.yPos = 200;
+		ship.xVel = 0;
+		ship.yVel = 0;
+		ship.direction = 0;
+	}
+	ship.lifetime = 1;
+	ship.health = 20;
+	ship.maxHealth = 20;
+	ship.bulletSpeed = 4;
+	ship.bulletDamage = 3;
+	ship.currentFireCooldown = 0;
+	ship.fireRate = 5;
+	ship.maxSpeed = 3;
+
+	// TODO turn on meteor spawning and stuff
+}
+*/
+startGame:
+	// gameState = GameState::InGame;
+	mov r0, #GAMESTATE_VARIANT_INGAME
+	ldr r1, =gameState
+	strb r0, [r1]
+
+	// set ship stats
+
+	// r0 = ship
+	ldr r0, =ship
+	ldrsh r1, [r0, #ENTITY_FIELD_LIFETIME]
+	cmp r1, #0
+	bne startGame_shipStillPresent
+
+	mov r1, #160
+	strh r1, [r0, #ENTITY_FIELD_XPOS]
+	mov r1, #200
+	strh r1, [r0, #ENTITY_FIELD_YPOS]
+	mov r1, #0
+	strb r1, [r0, #ENTITY_FIELD_XVEL]
+	strb r1, [r0, #ENTITY_FIELD_XVEL]
+	strb r1, [r0, #SHIP_FIELD_DIRECTION]
+
+startGame_shipStillPresent:
+
+	mov r1, #1
+	strb r1, [r0, #ENTITY_FIELD_LIFETIME]
+	mov r1, #20
+	strb r1, [r0, #SHIP_FIELD_HEALTH]
+	strb r1, [r0, #SHIP_FIELD_MAXHEALTH]
+	mov r1, #4
+	strb r1, [r0, #SHIP_FIELD_BULLETSPEED]
+	mov r1, #3
+	strb r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
+	mov r1, #0
+	strb r1, [r0, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
+	mov r1, #5
+	strb r1, [r0, #SHIP_FIELD_FIRERATE]
+	mov r1, #3
+	strb r1, [r0, #SHIP_FIELD_MAXSPEED]
+
+	bx lr
+// end startGame
 
 /*
 moveEntities: changes every entity's position based on their current velocity. The ship is prevented
@@ -638,10 +737,17 @@ maybeCollideBulletAsteroid_noCollision:
 
 /*
 fn maybeCollideShipAsteroid(asteroid: &mut Asteroid) {
+	if ship.lifetime == 0 {
+		return;
+	}
+
 	let distanceSquare = square(ship.xPos - asteroid.xPos) + square(ship.yPos - asteroid.yPos);
 	if distanceSquare <= square(asteroid.radius) + square(SHIP_RADIUS) {
 		ship.health -= asteroid.health;
 		asteroid.lifetime = 0;
+		if ship.health <= 0 {
+			killShip();
+		}
 	}
 }
 */
@@ -652,6 +758,10 @@ maybeCollideShipAsteroid:
 
 	// r1 = ship
 	ldr r1, =ship
+
+	ldrsh r2, [r1, #ENTITY_FIELD_LIFETIME]
+	cmp r2, #0
+	beq maybeCollideShipAsteroid_earlyReturn
 
 	// r2 = square(ship.xPos - asteroid.xPos)
 	ldrsh r2, [r1, #ENTITY_FIELD_XPOS]
@@ -674,25 +784,42 @@ maybeCollideShipAsteroid:
 	mov r4, #SHIP_RADIUS
 	mla r3, r4, r4, r3
 	cmp r2, r3
-	bgt maybeCollideShipAsteroid_noCollision
+	bgt maybeCollideShipAsteroid_earlyReturn
 
 	// there must be a collision
-
-	// ship.health -= asteroid.health; r2 = ??? r3 = ???
-	ldrsb r2, [r1, #SHIP_FIELD_HEALTH]
-	ldrsb r3, [r0, #ASTEROID_FIELD_HEALTH]
-	sub r2, r2, r3
-	strb r2, [r1, #SHIP_FIELD_HEALTH]
 
 	// asteroid.lifetime = 0;
 	mov r2, #0
 	strh r2, [r0, #ENTITY_FIELD_LIFETIME]
 
-	mov r0, r0
+	// ship.health -= asteroid.health; r2 = ??? r3 = ???
+	ldrsb r2, [r1, #SHIP_FIELD_HEALTH]
+	ldrsb r3, [r0, #ASTEROID_FIELD_HEALTH]
+	subs r2, r2, r3
+	strb r2, [r1, #SHIP_FIELD_HEALTH]
+	bllt killShip
 
-maybeCollideShipAsteroid_noCollision:
+maybeCollideShipAsteroid_earlyReturn:
 	pop {r4-r5, pc}
 // end maybeCollideShipAsteroid
+
+/*
+fn killShip() {
+	ship.lifetime = 0;
+	gameState = GameState::DeathScreen;
+}
+*/
+killShip:
+	ldr r0, =ship
+	mov r1, #0
+	strb r1, [r0, #ENTITY_FIELD_LIFETIME]
+
+	ldr r0, =gameState
+	mov r1, #GAMESTATE_VARIANT_DEATHSCREEN
+	strb r1, [r0]
+
+	bx lr
+// end killShip
 
 /*
 checkAsteroidCollision: determines whether a point is inside an asteroid
@@ -1119,11 +1246,18 @@ fn renderFrame(buffer: &PixBuffer) {
 	forEach(asteroidBuff, renderCostumedEntity, buffer);
 
 	// draw player
-	bitBlit(buffer, (*shipSkinArray)[ship.direction + 1], ship.xPos, ship.yPos)
+	if ship.lifetime != 0 {
+		bitBlit(buffer, (*shipSkinArray)[ship.direction + 1], ship.xPos, ship.yPos);
+	}
 
 	clearTextBuffer();
 	drawNum(0, 0, tick);
-	drawStr(15, 10, "Use WASD to move, IJKL to aim and fire");
+	match gameState {
+		GameState::DeathScreen => drawStr(34, 50, "You died! :("),
+		GameState::StartScreen => drawStr(34, 50, "Press SPACE!"),
+		GameState::Paused =>      drawStr(34, 50, "Game Paused"),
+		_ => (),
+	}
 }
 */
 renderFrame:
@@ -1151,8 +1285,11 @@ renderFrame:
 	bl forEach
 
 	// draw Player
-	mov r0, r4
 	ldr r3, =ship
+	ldrsb r2, [r3, #ENTITY_FIELD_LIFETIME]
+	cmp r2, #0
+	beq renderFrame_skipDrawPlayer
+	mov r0, r4
 	ldrsb r2, [r3, #SHIP_FIELD_DIRECTION]
 	add r2, r2, #1
 	ldr r1, =shipSkinArray
@@ -1160,6 +1297,7 @@ renderFrame:
 	ldrh r2, [r3, #ENTITY_FIELD_XPOS]
 	ldrh r3, [r3, #ENTITY_FIELD_YPOS]
 	bl bitBlit
+renderFrame_skipDrawPlayer:
 
 	bl clearTextBuffer
 
@@ -1170,17 +1308,50 @@ renderFrame:
 	ldr r2, [r2]
 	bl drawNum
 
-	// drawStr(...)
-	mov r0, #15
-	mov r1, #10
-	ldr r2, =helpMessage
-	bl drawStr
-.data
-helpMessage:
-	.asciz "Use WASD to move, IJKL to aim and fire"
-.text
+	// print game state
+	ldr r0, =gameState
+	ldrb r0, [r0]
+	cmp r0, #GAMESTATE_VARIANT_DEATHSCREEN
+	beq renderFrame_deathScreen
+	cmp r0, #GAMESTATE_VARIANT_STARTSCREEN
+	beq renderFrame_startScreen
+	cmp r0, #GAMESTATE_VARIANT_PAUSED
+	beq renderFrame_paused
+	b renderFrame_gameStateDone
+renderFrame_deathScreen:
 
+	mov r0, #34
+	mov r1, #50
+	ldr r2, =deathMessage
+	bl drawStr
+
+	b renderFrame_gameStateDone
+renderFrame_startScreen:
+
+	mov r0, #34
+	mov r1, #50
+	ldr r2, =startMessage
+	bl drawStr
+
+	b renderFrame_gameStateDone
+renderFrame_paused:
+
+	mov r0, #34
+	mov r1, #50
+	ldr r2, =pausedMessage
+	bl drawStr
+
+renderFrame_gameStateDone:
 	pop {r4-r7, pc}
+
+.data
+deathMessage:
+	.asciz "You died! :("
+startMessage:
+	.asciz "Press SPACE!"
+pausedMessage:
+	.asciz "Game paused"
+.text
 // end renderFrame
 
 /*
