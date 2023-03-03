@@ -27,22 +27,32 @@ struct KeyState {
 .EQU KEYSTATE_BITINDEXOF_PRESSED, 0
 .EQU KEYSTATE_BITINDEXOF_CHANGED, 1
 
-// let mut keyboardState: &[keyState; 8] = staticallocation;
+// let mut keyboardState: &[keyState; 512] = staticallocation;
+// the index of a certain keyState in this array is equal to its PS/2 scan code, except for extended
+// keys, whose indices are their scan codes + 256
 keyboardState:
 	.skip KEYBOARDSTATE_SIZE
-.EQU KEYBOARDSTATE_INDEXOF_ESC, 0
-.EQU KEYBOARDSTATE_INDEXOF_SPACE, 1
-.EQU KEYBOARDSTATE_INDEXOF_ONE, 2
-.EQU KEYBOARDSTATE_INDEXOF_TWO, 3
-.EQU KEYBOARDSTATE_INDEXOF_W, 4
-.EQU KEYBOARDSTATE_INDEXOF_A, 5
-.EQU KEYBOARDSTATE_INDEXOF_S, 6
-.EQU KEYBOARDSTATE_INDEXOF_D, 7
-.EQU KEYBOARDSTATE_INDEXOF_I, 8
-.EQU KEYBOARDSTATE_INDEXOF_J, 9
-.EQU KEYBOARDSTATE_INDEXOF_K, 10
-.EQU KEYBOARDSTATE_INDEXOF_L, 11
-.EQU KEYBOARDSTATE_SIZE, 12
+.EQU KEYBOARDSTATE_INDEXOF_ESC, 0x76
+.EQU KEYBOARDSTATE_INDEXOF_SPACE, 0x29
+.EQU KEYBOARDSTATE_INDEXOF_W, 0x1d
+.EQU KEYBOARDSTATE_INDEXOF_A, 0x1c
+.EQU KEYBOARDSTATE_INDEXOF_S, 0x1b
+.EQU KEYBOARDSTATE_INDEXOF_D, 0x23
+.EQU KEYBOARDSTATE_INDEXOF_I, 0x43
+.EQU KEYBOARDSTATE_INDEXOF_J, 0x3b
+.EQU KEYBOARDSTATE_INDEXOF_K, 0x42
+.EQU KEYBOARDSTATE_INDEXOF_L, 0x4b
+.EQU KEYBOARDSTATE_INDEXOF_ZERO, 0x45
+.EQU KEYBOARDSTATE_INDEXOF_ONE, 0x16
+.EQU KEYBOARDSTATE_INDEXOF_TWO, 0x1e
+.EQU KEYBOARDSTATE_INDEXOF_THREE, 0x26
+.EQU KEYBOARDSTATE_INDEXOF_FOUR, 0x25
+.EQU KEYBOARDSTATE_INDEXOF_FIVE, 0x2e
+.EQU KEYBOARDSTATE_INDEXOF_SIX, 0x36
+.EQU KEYBOARDSTATE_INDEXOF_SEVEN, 0x3d
+.EQU KEYBOARDSTATE_INDEXOF_EIGHT, 0x2e
+.EQU KEYBOARDSTATE_INDEXOF_NINE, 0x46
+.EQU KEYBOARDSTATE_SIZE, 512
 
 /*
 type TextBuffer = [[u8; TEXT_WIDTH]; TEXT_HEIGHT]; // not a regular array;
@@ -1010,30 +1020,9 @@ fn updateKeyboardState() {
 			0xf0 => make = false,
 			0xe0 => extended = true,
 			scanCode => {
-				let keyIndex = if extended {
-					match code {
-						_ => goto resetFlags;
-					}
-				} else {
-					match code {
-						0x16 => KEYBOARDSTATE_INDEXOF_ONE,
-						0x1e => KEYBOARDSTATE_INDEXOF_TWO,
-						0x29 => KEYBOARDSTATE_INDEXOF_SPACE,
-						0x76 => KEYBOARDSTATE_INDEXOF_ESC,
-						0x1d => KEYBOARDSTATE_INDEXOF_W,
-						0x1c => KEYBOARDSTATE_INDEXOF_A,
-						0x1b => KEYBOARDSTATE_INDEXOF_S,
-						0x23 => KEYBOARDSTATE_INDEXOF_D,
-						0x43 => KEYBOARDSTATE_INDEXOF_I,
-						0x3b => KEYBOARDSTATE_INDEXOF_J,
-						0x42 => KEYBOARDSTATE_INDEXOF_K,
-						0x4b => KEYBOARDSTATE_INDEXOF_L,
-						_ => goto resetFlags;
-					}
-				};
-				keyboardState[keyIndex].changed = keyboardState[offset].pressed != make;
+				let keyIndex = if extended { scanCode } else { scanCode + 256 };
+				keyboardState[keyIndex].changed = keyboardState[keyIndex].pressed != make;
 				keyboardState[keyIndex].pressed = make;
-				resetFlags:
 				make = true;
 				extended = false;
 			},
@@ -1042,12 +1031,14 @@ fn updateKeyboardState() {
 }
 */
 updateKeyboardState:
-	push {r4}
-
-	// r0's usage is quite volatile
+	push {r4-r6}
 
 	// r1 = keyboardState
 	ldr r1, =keyboardState
+
+	// r5 = make, r6 = extended
+	ldrb r5, [r1, #KEYBOARDSTATE_OFFSETFOR_MAKE]
+	ldrb r6, [r1, #KEYBOARDSTATE_OFFSETFOR_EXTENDED]
 
 	// iterate over keyState
 	mov r2, #KEYBOARDSTATE_SIZE
@@ -1072,82 +1063,38 @@ updateKeyboardState_processCodesBody:
 	// r3 = scanCode
 	ldrb r3, [r2, #FIFO_FIELD_NEXT]
 
-	// outer match statement
+	// match statement
 	cmp r3, #0xf0
 	beq updateKeyboardState_codeBreak
 	cmp r3, #0xe0
 	beq updateKeyboardState_codeExtended
 
 	// r3 = keyIndex
-	ldrb r0, [r1, #KEYBOARDSTATE_OFFSETFOR_EXTENDED]
-	cmp r0, #0
-	bne updateKeyboardState_checkExtendedCodes
-	cmp r3, #0x29
-	moveq r3, #KEYBOARDSTATE_INDEXOF_SPACE
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x76
-	moveq r3, #KEYBOARDSTATE_INDEXOF_ESC
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x16
-	moveq r3, #KEYBOARDSTATE_INDEXOF_ONE
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x1e
-	moveq r3, #KEYBOARDSTATE_INDEXOF_TWO
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x1d
-	moveq r3, #KEYBOARDSTATE_INDEXOF_W
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x1c
-	moveq r3, #KEYBOARDSTATE_INDEXOF_A
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x1b
-	moveq r3, #KEYBOARDSTATE_INDEXOF_S
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x23
-	moveq r3, #KEYBOARDSTATE_INDEXOF_D
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x43
-	moveq r3, #KEYBOARDSTATE_INDEXOF_I
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x3b
-	moveq r3, #KEYBOARDSTATE_INDEXOF_J
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x42
-	moveq r3, #KEYBOARDSTATE_INDEXOF_K
-	beq updateKeyboardState_keyIndexFound
-	cmp r3, #0x4b
-	moveq r3, #KEYBOARDSTATE_INDEXOF_L
-	beq updateKeyboardState_keyIndexFound
-	b updateKeyboardState_resetFlags
-updateKeyboardState_checkExtendedCodes:
-	b updateKeyboardState_resetFlags
-updateKeyboardState_keyIndexFound:
+	cmp r6, #1
+	addeq r3, r3, #0x100
 
 	// r4 = keyboardState[keyIndex]
 	ldrb r4, [r1, r3]
-	ldrb r0, [r1, #KEYBOARDSTATE_OFFSETFOR_MAKE]
-	add r4, r4, r0
-	add r4, r0, r4, lsl #1
+	add r4, r4, r5
+	add r4, r5, r4, lsl #1
 	and r4, r4, #((1 << KEYSTATE_BITINDEXOF_CHANGED) + (1 << KEYSTATE_BITINDEXOF_PRESSED)) // discard useless bits
 	strb r4, [r1, r3]
 
-updateKeyboardState_resetFlags:
-	mov r0, #1 // hword representing both make and extended flags
-	strh r0, [r1, #-2]
+	// reset flags
+	mov r5, #1
+	mov r6, #0
 
 	b updateKeyboardState_processCodesCond
 updateKeyboardState_codeBreak:
 
 	// make = false
-	mov r0, #0
-	strb r0, [r1, #KEYBOARDSTATE_OFFSETFOR_MAKE]
+	mov r5, #0
 
 	b updateKeyboardState_processCodesCond
 updateKeyboardState_codeExtended:
 
 	// extended = true
-	mov r0, #1
-	strb r0, [r1, #KEYBOARDSTATE_OFFSETFOR_EXTENDED]
+	mov r6, #1
 
 updateKeyboardState_processCodesCond:
 	// r3 = bufferSize
@@ -1155,7 +1102,11 @@ updateKeyboardState_processCodesCond:
 	cmp r3, #0
 	bne updateKeyboardState_processCodesBody
 
-	pop {r4}
+	// restore make and extended to memory
+	strb r5, [r1, #KEYBOARDSTATE_OFFSETFOR_MAKE]
+	strb r6, [r1, #KEYBOARDSTATE_OFFSETFOR_EXTENDED]
+
+	pop {r4-r6}
 	bx lr
 // end updateKeyboardState
 
@@ -1172,7 +1123,7 @@ fn renderFrame(buffer: &PixBuffer) {
 
 	clearTextBuffer();
 	drawNum(0, 0, tick);
-	drawStr(15, 10, "Pushbuttons: up/down/left/right. Keep the ball up!");
+	drawStr(15, 10, "Use WASD to move, IJKL to aim and fire");
 }
 */
 renderFrame:
@@ -1226,7 +1177,7 @@ renderFrame:
 	bl drawStr
 .data
 helpMessage:
-	.asciz "Use WASD to move. Keep the ball up!"
+	.asciz "Use WASD to move, IJKL to aim and fire"
 .text
 
 	pop {r4-r7, pc}
