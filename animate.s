@@ -590,21 +590,21 @@ maybeCollideBulletAsteroid:
 	// r2 = square(bullet.xPos - asteroid.xPos)
 	ldrsh r2, [r1, #ENTITY_FIELD_XPOS]
 	ldrsh r3, [r0, #ENTITY_FIELD_XPOS]
-	sub r2, r2, r3
-	mul r2, r2, r2
+	sub r3, r2, r3
+	mul r2, r3, r3
 
 	// r3 = square(bullet.yPos - asteroid.yPos)
 	ldrsh r3, [r1, #ENTITY_FIELD_YPOS]
 	ldrsh r4, [r0, #ENTITY_FIELD_YPOS]
-	sub r3, r3, r4
-	mul r3, r3, r3
+	sub r4, r3, r4
+	mul r3, r4, r4
 
 	// r2 = distanceSquare
 	add r2, r2, r3
 
-	// skip if out of range
-	ldrh r3, [r0, #ASTEROID_FIELD_RADIUS]
-	mul r3, r3, r3
+	// skip if out of range; r3 = ???
+	ldrh r4, [r0, #ASTEROID_FIELD_RADIUS]
+	mul r3, r4, r4
 	cmp r2, r3
 	bgt maybeCollideBulletAsteroid_noCollision
 
@@ -646,24 +646,23 @@ maybeCollideShipAsteroid:
 	// r2 = square(ship.xPos - asteroid.xPos)
 	ldrsh r2, [r1, #ENTITY_FIELD_XPOS]
 	ldrsh r3, [r0, #ENTITY_FIELD_XPOS]
-	sub r2, r2, r3
-	mul r2, r2, r2
+	sub r3, r2, r3
+	mul r2, r3, r3
 
 	// r3 = square(ship.yPos - asteroid.yPos)
 	ldrsh r3, [r1, #ENTITY_FIELD_YPOS]
 	ldrsh r4, [r0, #ENTITY_FIELD_YPOS]
-	sub r3, r3, r4
-	mul r3, r3, r3
+	sub r4, r3, r4
+	mul r3, r4, r4
 
 	// r2 = distanceSquare
 	add r2, r2, r3
 
 	// skip if out of range
-	ldrh r3, [r0, #ASTEROID_FIELD_RADIUS]
-	mul r3, r3, r3
+	ldrh r4, [r0, #ASTEROID_FIELD_RADIUS]
+	mul r3, r4, r4
 	mov r4, #SHIP_RADIUS
-	mul r4, r4, r4
-	add r3, r3, r4
+	mla r3, r4, r4, r3
 	cmp r2, r3
 	bgt maybeCollideShipAsteroid_noCollision
 
