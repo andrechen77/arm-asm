@@ -8,10 +8,9 @@
 .EQU FIFO_FIELD_NEXT, 0
 .EQU FIFO_FIELD_BUFFERSIZE, 2
 
-.align 1 // aligned because of a strh instruction in updateKeyboardState
-	// let mut make = true; // see updateKeyboard State
+// let mut make = true; // see updateKeyboard State
 	.byte 0x1
-	// let mut extended = false; // see updateKeyboardState
+// let mut extended = false; // see updateKeyboardState
 	.byte 0x0
 // Use the keyboardState label to refer to these registers
 .EQU KEYBOARDSTATE_OFFSETFOR_MAKE, -2
@@ -61,7 +60,7 @@ type TextBuffer = [[u8; TEXT_WIDTH]; TEXT_HEIGHT]; // not a regular array;
 // Give it a size of 0x2000 (1 << 13)
 }
 */
-.EQU TEXTBUFFER_ROWSHIFT, 1 << 7 // uint
+.EQU TEXTBUFFER_ROWSHIFT, 7 // uint
 .EQU TEXT_WIDTH, 80 // uint
 .EQU TEXT_HEIGHT, 60 // uint
 
@@ -330,7 +329,7 @@ advanceFrame:
 /*
 processPlayerInput: changes the ship's velocity and direction based on WASD and IJKL states
 
-processPlayerInput() {
+fn processPlayerInput() {
 	ship.direction = (keyboardState.L.pressed as i32) - (keyboardState.J.pressed as i32);
 
 	let xMove = (keyboardState.D.pressed as i32) - (keyboardState.A.pressed as i32);
@@ -820,53 +819,6 @@ killShip:
 
 	bx lr
 // end killShip
-
-/*
-checkAsteroidCollision: determines whether a point is inside an asteroid
-
-fn checkAsteroidCollision(asteroid: &mut Asteroid, x: i16, y: i16) -> bool {
-	bullet.xPos - asteroid.xPos >= 0 &&
-	bullet.xPos - asteroid.xPos <= asteroid.diameter &&
-	bullet.yPos - asteroid.yPos >= 0 &&
-	bullet.yPos - asteroid.yPos <= asteroid.diameter
-}
-*/
-/*
-checkAsteroidCollision:
-	push {r4}
-
-	// r0 = asteroid, r1 = x, r2 = y
-
-	// r4 = asteroid.diameter
-	ldrh r4, [r0, #ASTEROID_FIELD_DIAMETER]
-
-	// r1 = bullet.xPos - asteroid.xPos
-	ldrsh r3, [r0, #ENTITY_FIELD_XPOS]
-	subs r1, r1, r3
-
-	blt checkAsteroidCollision_noCollision
-	cmp r1, r4
-	bgt checkAsteroidCollision_noCollision
-
-	// r2 = bullet.yPos - asteroid.yPos
-	ldrsh r3, [r0, #ENTITY_FIELD_YPOS]
-	subs r2, r2, r3
-
-	blt checkAsteroidCollision_noCollision
-	cmp r2, r4
-	bgt checkAsteroidCollision_noCollision
-
-	// there is a collision
-	mov r0, #1
-	b checkAsteroidCollision_done
-checkAsteroidCollision_noCollision:
-	mov r0, #0
-checkAsteroidCollision_done:
-
-	pop {r4}
-	bx lr
-// end checkAsteroidCollision
-*/
 
 /*
 trimCsb: updates the begin index to reflect the index of the first non-dead element (or the end
@@ -1500,7 +1452,7 @@ clearTextBuffer_innerForCond:
 	blo clearTextBuffer_innerForBody
 
 	add r2, r2, #1
-	add r0, r0, #TEXTBUFFER_ROWSHIFT // update pointer to new row
+	add r0, r0, #(1 << TEXTBUFFER_ROWSHIFT) // update pointer to new row
 clearTextBuffer_outerForCond:
 	cmp r2, #TEXT_HEIGHT
 	blo clearTextBuffer_outerForBody
