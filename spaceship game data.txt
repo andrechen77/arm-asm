@@ -22,3 +22,9 @@ check collisions between:
 	spaceship and asteroids
 	asteroids and asteroids
 	asteroids and bullets
+
+other todos:
+random number generator
+add automatic meteor spawning based on how far in the game
+chance of special meteors that drop upgrade items
+eventually escape the asteroid field?

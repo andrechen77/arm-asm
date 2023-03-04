@@ -1,4 +1,30 @@
+/*
+Written by:
+Andre Chen
 
+A lone spaceship tries to cross an asteroid field, harvesting minerals and powerups to upgrade
+itself along the way in order to survive the deadly asteroids.
+
+Advanced features implemented:
+ * Special visual effects (screen shakes and animated explosions) TODO
+ * Sound and music PROBABLYNOTGONNADO
+ * Massive number of active discernable sprites
+ * Scrolling background TODO
+ * Non-constant velocity using WASD
+ * In-flight projectiles triggered by player input
+ * Power-ups
+ * Complex scoring system (buy upgrades to improve situation)
+
+How to play the game:
+ * Use WASD to move, I to fire, JL to rotate ship, and 1-5 to buy stat upgrades.
+ * Shoot asteroids to gain minerals, which are used to buy stat upgrades.
+ * Special asteroids can drop items like health kits, mario super stars, or instant stat upgrades.
+ * Asteroids get stronger and more frequent as the game progresses.
+ * Survive until the end to win--but beware it gets kinda crazy.
+
+The whole game is in one file because it's of school's submission requirements.
+Intended to run on https://cpulator.01xz.net/?sys=arm-de1soc
+*/
 
 .data
 // types and global data here ======================================================================
