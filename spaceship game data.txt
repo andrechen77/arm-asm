@@ -1,100 +1,24 @@
 spaceship game data
 
-let fireCooldown = 100;
-
-let mut cash: u8;
-
-struct Entity {
-	lifetime: i16,
-	xPos: i16,
-	yPos: i16,
-	xVel: i8,
-	yVel: i8,
-}
-
 struct Particle extends Entity {
 	color: u16,
 }
 
-// spaceship has its anchor in the middle
-struct Ship extends Entity {
-	direction: i8, // either -1, 0, 1
-	health: i8,
-	maxHealth: i8,
-	bulletSpeed: i8,
-	bulletDamage: i8,
-	currentFireCooldown: i8,
-	fireRate: i8,
-	maxSpeed: i8,
+struct Animation extends Entity {
+	frames: &[Pixmap],
+	numFrames: u32,
 }
 
-// asteroids have their anchor at the top left corner
-struct Asteroid extends Entity {
-	appearance: &Pixmap,
-	diameter: u16,
-	health: i8,
-}
-
-struct Bullet extends Entity {
-	appearance: &Pixmap,
-	damage: i8,
-}
-
-struct Item extends Entity {
-	appearance: &Pixmap,
-	type: enum { healthKit, mineral, invulnerability },
-}
-
-struct Explosion extends Entity {
-	appearances: &[Pixmap],
-	frame: u8,
-}
-
-struct Pixmap {
-	width: u16,
-	height: u16,
-	anchorX: u16,
-	anchorY: u16,
-	transparency: u16,
-}
-
-Spaceship
-CircleBuff<Asteroid>
-CircleBuff<Bullet>
-CircleBuff<Item>
-CircleBuff<Particle>
-CircleBuff<Animation>
-CircleBuff<Explosion>
+Ship
+Csb<Asteroid>
+Csb<Bullet>
+Csb<Item>
+Csb<Particle>
+Csb<Animation>
+Csb<Explosion>
 
 check collisions between:
 	spaceship and items
 	spaceship and asteroids
 	asteroids and asteroids
 	asteroids and bullets
-
-a.left < b.right
-b.left < a.right
-
-struct CircleBuff<T> {
-	elementSize: uint,
-	capacity: uint,
-	begin: uint,
-	end: uint,
-	data: [T; len], // variable length array
-}
-
-fn inc(iterator: &uint, capacity: uint) {
-	*iterator += 1;
-	if *iterator == capacity {
-		*iterator = 0;
-	}
-}
-
-fn forEach<T>(buff: &CircleBuff<T>, operation: fn (&T) -> bool) {
-	while buff.begin < buff.end && isDead(buff.data[buff.begin]) {
-		buff.begin += 1; // using circular increments
-	}
-	for i in buff.begin..buff.end { // using circular increments
-		operation(buff[i]);
-	}
-}
