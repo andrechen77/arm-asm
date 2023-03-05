@@ -360,7 +360,7 @@ advanceFrame: changes the game state to reflect the next frame
 
 fn advanceFrame() {
 	processPlayerInput();
-	// TODO move every entity in the game based on its velocity
+	moveEntities();
 	processCollisions();
 	trimCsb(bulletBuff);
 	trimCsb(asteroidBuff);
@@ -412,7 +412,8 @@ fn processPlayerInput() {
 		ship.xVel -= sign(ship.xVel);
 	}
 
-	if keyboardState.I.changed && keyboardState.I.pressed {
+	if ship.currentFireCoolDown <= 0 && keyboardState.I.pressed {
+		ship.currentFireCooldown += 100;
 		spawnBullet(ship);
 	}
 
@@ -528,10 +529,18 @@ processPlayerInput_yVelCalcsDone:
 	strb r2, [r5, #ENTITY_FIELD_YVEL]
 
 	// fire bullet
+	ldrsb r0, [r5, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
+	cmp r0, #0
+	bgt processPlayerInput_noFire
 	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_I]
-	cmp r1, #3
+	ands r1, r1, #1
+	beq processPlayerInput_noFire
+	ldrsb r0, [r5, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
+	add r0, r0, #100
+	strb r0, [r5, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
 	mov r0, r5
-	bleq spawnBullet
+	bl spawnBullet
+processPlayerInput_noFire:
 
 	// spawn asteroid
 	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_K]
@@ -624,6 +633,9 @@ moveEntities: changes every entity's position based on their current velocity. T
 from moving off the screen.
 
 fn moveEntities() {
+	if ship.currentFireCooldown > 0 {
+		ship.currentFireCooldown -= ship.fireRate;
+	}
 	moveEntityBounded(ship)
 
 	forEach(bulletBuff, moveEntityWithVoid);
@@ -635,6 +647,13 @@ moveEntities:
 	push {lr}
 
 	ldr r0, =ship
+	ldrsb r1, [r0, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
+	cmp r1, #0
+	ble moveEntities_noReduceCooldown
+	ldrsb r2, [r0, #SHIP_FIELD_FIRERATE]
+	sub r1, r1, r2
+	strb r1, [r0, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
+moveEntities_noReduceCooldown:
 	bl moveEntityBounded
 
 	ldr r0, =bulletBuff
