@@ -905,14 +905,7 @@ maybeCollideShipItem:
 	ldr r1, =maybeCollideShipItem_jumpTable
 	ldr pc, [r1, r0, lsl #2]
 
-	maybeCollideShipItem_caseHealthKit:
-
-	ldr r0, =ship
-	ldrsb r1, [r0, #SHIP_FIELD_MAXHEALTH]
-	strb r1, [r0, #SHIP_FIELD_HEALTH]
-
-	b maybeCollideShipItem_done
-	maybeCollideShipItem_caseMineral:
+maybeCollideShipItem_caseMineral:
 
 	ldr r0, =mineralBank
 	ldr r1, [r0]
@@ -920,12 +913,19 @@ maybeCollideShipItem:
 	str r1, [r0]
 
 	b maybeCollideShipItem_done
-	maybeCollideShipItem_caseInvulnerability:
+maybeCollideShipItem_caseHealthKit:
+
+	ldr r0, =ship
+	ldrsb r1, [r0, #SHIP_FIELD_MAXHEALTH]
+	strb r1, [r0, #SHIP_FIELD_HEALTH]
+
+	b maybeCollideShipItem_done
+maybeCollideShipItem_caseInvulnerability:
 
 	// do nothing
 
 	b maybeCollideShipItem_done
-	maybeCollideShipItem_caseUpgradeMaxHealth:
+maybeCollideShipItem_caseUpgradeMaxHealth:
 
 	ldr r0, =ship
 	ldrsb r1, [r0, #SHIP_FIELD_MAXHEALTH]
@@ -933,7 +933,7 @@ maybeCollideShipItem:
 	strb r1, [r0, #SHIP_FIELD_MAXHEALTH]
 
 	b maybeCollideShipItem_done
-	maybeCollideShipItem_caseUpgradeBulletSpeed:
+maybeCollideShipItem_caseUpgradeBulletSpeed:
 
 	ldr r0, =ship
 	ldrsb r1, [r0, #SHIP_FIELD_BULLETSPEED]
@@ -941,7 +941,7 @@ maybeCollideShipItem:
 	strb r1, [r0, #SHIP_FIELD_BULLETSPEED]
 
 	b maybeCollideShipItem_done
-	maybeCollideShipItem_caseUpgradeBulletDamage:
+maybeCollideShipItem_caseUpgradeBulletDamage:
 
 	ldr r0, =ship
 	ldrsb r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
@@ -949,7 +949,7 @@ maybeCollideShipItem:
 	strb r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
 
 	b maybeCollideShipItem_done
-	maybeCollideShipItem_caseUpgradeFireRate:
+maybeCollideShipItem_caseUpgradeFireRate:
 
 	ldr r0, =ship
 	ldrsb r1, [r0, #SHIP_FIELD_FIRERATE]
@@ -957,18 +957,18 @@ maybeCollideShipItem:
 	strb r1, [r0, #SHIP_FIELD_FIRERATE]
 
 	b maybeCollideShipItem_done
-	maybeCollideShipItem_caseUpgradeMaxSpeed:
+maybeCollideShipItem_caseUpgradeMaxSpeed:
 
 	ldr r0, =ship
 	ldrsb r1, [r0, #SHIP_FIELD_MAXSPEED]
 	add r1, r1, #1
 	strb r1, [r0, #SHIP_FIELD_MAXSPEED]
 
-	maybeCollideShipItem_done:
+maybeCollideShipItem_done:
 	pop {r4-r5, pc}
 maybeCollideShipItem_jumpTable:
-	.word maybeCollideShipItem_caseHealthKit
 	.word maybeCollideShipItem_caseMineral
+	.word maybeCollideShipItem_caseHealthKit
 	.word maybeCollideShipItem_caseInvulnerability
 	.word maybeCollideShipItem_caseUpgradeMaxHealth
 	.word maybeCollideShipItem_caseUpgradeBulletSpeed
