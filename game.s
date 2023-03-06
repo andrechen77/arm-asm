@@ -201,12 +201,14 @@ struct Bullet extends CostumedEntity {
 
 /*
 struct Asteroid extends CostumedEntity {
-	radius: i16,
+	size: i8,
 	health: i8,
+	originalHealth: i8,
 	isSpecial: bool,
 */
-.EQU ASTEROID_FIELD_RADIUS, COSTUMEDENTITY_SIZE
-.EQU ASTEROID_FIELD_HEALTH, COSTUMEDENTITY_SIZE + 2
+.EQU ASTEROID_FIELD_SIZE, COSTUMEDENTITY_SIZE
+.EQU ASTEROID_FIELD_HEALTH, COSTUMEDENTITY_SIZE + 1
+.EQU ASTEROID_FIELD_ORIGINALHEALTH, COSTUMEDENTITY_SIZE	+ 2
 .EQU ASTEROID_FIELD_ISSPECIAL, COSTUMEDENTITY_SIZE + 3
 .EQU ASTEROID_SIZE, COSTUMEDENTITY_SIZE + 4
 
@@ -779,15 +781,14 @@ processCollisions:
 
 /*
 fn maybeCollideBulletAsteroid(asteroid: &mut Asteroid, bullet: &mut Bullet) {
-	if !checkIfWithinDistance(asteroid, bullet, asteroid.radius) {
+	if !checkIfWithinDistance(asteroid, bullet, 1 << asteroid.size) {
 		return;
 	}
 
 	bullet.lifetime = 0;
 	asteroid.health -= bullet.damage;
 	if asteroid.health <= 0 {
-		asteroid.lifetime = 0;
-		spawnItem(asteroid.xPos, asteroid.yPos, asteroid.isSpecial);
+		destroyAsteroid(asteroid)
 	}
 }
 */
@@ -801,7 +802,9 @@ maybeCollideBulletAsteroid:
 	mov r5, r1
 
 	// r0 and r1 already have the right values
-	ldrsh r2, [r0, #ASTEROID_FIELD_RADIUS]
+	ldrsh r2, [r0, #ASTEROID_FIELD_SIZE]
+	mov r3, #1
+	lsl r2, r3, r2
 	bl checkIfWithinDistance
 	cmp r0, #0
 	beq maybeCollideBulletAsteroid_done
@@ -814,17 +817,146 @@ maybeCollideBulletAsteroid:
 	strb r1, [r4, #ASTEROID_FIELD_HEALTH]
 	bgt maybeCollideBulletAsteroid_done
 
-	strb r0, [r4, #ENTITY_FIELD_LIFETIME]
-
-	ldrsh r0, [r4, #ENTITY_FIELD_XPOS]
-	ldrsh r1, [r4, #ENTITY_FIELD_YPOS]
-	ldrb r2, [r4, #ASTEROID_FIELD_ISSPECIAL]
-	bl spawnItem
+	mov r0, r4
+	bl destroyAsteroid
 
 maybeCollideBulletAsteroid_done:
 
 	pop {r4-r5, pc}
 // end maybeCollideBulletAsteroid
+
+/*
+destroyAsteroid: removes an asteroid, and either splits it into two smaller asteroids of one lesser
+size (if the size is greater than 3), or turns the asteroid into an item (if the size is not greater
+than 3). A special asteroid that splits will have a random one of its children be special.
+
+fn destroyAsteroid(asteroid: &mut Asteroid) {
+	if asteroid.size > 3 {
+		let left = asteroid;
+		let right = addSpace(asteroidBuff);
+
+		left.lifetime = 60;
+		right.lifetime = 60;
+
+		right.xPos = left.xPos;
+		right.yPos = left.yPos;
+
+		let (oldXVel, oldYVel) = (left.xVel, left.yVel);
+		left.xVel = -oldYVel;
+		right.xVel = oldYVel;
+		left.yVel = oldXVel;
+		right.yVel = -oldXVel;
+
+		left.size -= 1;
+		right.size = left.size;
+
+		left.originalHealth = left.originalHealth / 2;
+		right.originalHealth = left.originalHealth;
+		left.health = left.originalHealth;
+		right.health = left.health;
+
+		right.isSpecial = false;
+
+		if left.isSpecial {
+			if (rand >> 31 as bool) {
+				left.isSpecial = false;
+				right.isSpecial = true;
+			}
+		}
+
+		left.costume = asteroidSkinArray[left.isSpecial][left.size];
+
+		right.costume = asteroidSkinArray[right.isSpecial][right.size];
+	} else {
+		asteroid.lifetime = 0;
+		spawnItem(asteroid.xPos, asteroid.yPos, asteroid.isSpecial);
+	}
+*/
+destroyAsteroid:
+	push {r4-r5, lr}
+
+	// r0 = asteroid
+
+	ldrsb r1, [r0, #ASTEROID_FIELD_SIZE]
+	cmp r1, #3
+	bgt destroyAsteroid_split
+
+	// asteroid.lifetime = 0;
+	mov r1, #0
+	strb r1, [r0, #ENTITY_FIELD_LIFETIME]
+
+	// spawnItem(...); r0 = ???
+	ldrsh r1, [r0, #ENTITY_FIELD_YPOS]
+	ldrb r2, [r0, #ASTEROID_FIELD_ISSPECIAL]
+	ldrsh r0, [r0, #ENTITY_FIELD_XPOS]
+	bl spawnItem
+
+	b destroyAsteroid_done
+destroyAsteroid_split:
+
+	// r4 = left, r5 = right, r0 = ???
+	mov r4, r0
+	ldr r0, =asteroidBuff
+	bl addSpace
+	mov r5, r0
+
+	mov r0, #60
+	strb r0, [r4, #ENTITY_FIELD_LIFETIME]
+	strb r0, [r5, #ENTITY_FIELD_LIFETIME]
+
+	ldrsh r0, [r4, #ENTITY_FIELD_XPOS]
+	strh r0, [r5, #ENTITY_FIELD_XPOS]
+	ldrsh r0, [r4, #ENTITY_FIELD_YPOS]
+	strh r0, [r5, #ENTITY_FIELD_YPOS]
+
+	ldrsb r0, [r4, #ENTITY_FIELD_YVEL] // r0 = oldYVel
+	ldrsb r1, [r4, #ENTITY_FIELD_XVEL] // r1 = oldXVel
+	strb r0, [r5, #ENTITY_FIELD_XVEL]
+	rsb r0, r0, #0
+	strb r0, [r4, #ENTITY_FIELD_XVEL]
+	strb r1, [r4, #ENTITY_FIELD_YVEL]
+	rsb r1, r1, #0
+	strb r1, [r5, #ENTITY_FIELD_YVEL]
+
+	ldrb r0, [r4, #ASTEROID_FIELD_SIZE]
+	sub r0, r0, #1
+	strb r0, [r4, #ASTEROID_FIELD_SIZE]
+	strb r0, [r5, #ASTEROID_FIELD_SIZE]
+
+	ldrsb r0, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
+	asr r0, r0, #1
+	strb r0, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
+	strb r0, [r5, #ASTEROID_FIELD_ORIGINALHEALTH]
+	strb r0, [r4, #ASTEROID_FIELD_HEALTH]
+	strb r0, [r5, #ASTEROID_FIELD_HEALTH]
+
+	mov r0, #0
+	strb r0, [r5, #ASTEROID_FIELD_ISSPECIAL]
+
+	ldrb r0, [r4, #ASTEROID_FIELD_ISSPECIAL]
+	cmp r0, #0
+	beq destroyAsteroid_splitSpecialDone
+
+	bl rand
+	lsrs r0, r0, #31
+	beq destroyAsteroid_splitSpecialDone
+
+	// r0 must be equal to 1 at this point
+	strb r0, [r5, #ASTEROID_FIELD_ISSPECIAL]
+	mov r0, #0
+	strb r0, [r4, #ASTEROID_FIELD_ISSPECIAL]
+
+destroyAsteroid_splitSpecialDone:
+
+	// TODO calculate the correct skin to use
+	ldr r0, =asteroidSkin
+	str r0, [r4, #COSTUMEDENTITY_FIELD_COSTUME]
+	str r0, [r5, #COSTUMEDENTITY_FIELD_COSTUME]
+
+destroyAsteroid_done:
+
+	pop {r4-r5, pc}
+// end destroyAsteroid
 
 /*
 fn maybeCollideShipItem(item: &mut Item) {
@@ -984,7 +1116,7 @@ fn maybeCollideShipAsteroid(asteroid: &mut Asteroid) {
 	}
 
 	let distanceSquare = square(ship.xPos - asteroid.xPos) + square(ship.yPos - asteroid.yPos);
-	if distanceSquare <= square(asteroid.radius) + square(SHIP_RADIUS) {
+	if distanceSquare <= square(1 << asteroid.size) + square(SHIP_RADIUS) {
 		ship.health -= asteroid.health;
 		asteroid.lifetime = 0;
 		if ship.health <= 0 {
@@ -1021,7 +1153,9 @@ maybeCollideShipAsteroid:
 	add r2, r2, r3
 
 	// skip if out of range
-	ldrsh r4, [r0, #ASTEROID_FIELD_RADIUS]
+	ldrsh r4, [r0, #ASTEROID_FIELD_SIZE]
+	mov r3, #1
+	lsl r4, r3, r4
 	mul r3, r4, r4
 	mov r4, #SHIP_RADIUS
 	mla r3, r4, r4, r3
@@ -1316,8 +1450,9 @@ fn spawnAsteroid() {
 	asteroid.xVel = -2;
 	asteroid.yVel = 4;
 	asteroid.costume = shipSkinForward;
-	asteroid.radius = 32;
-	asteroid.health = 25;
+	asteroid.size = 5;
+	asteroid.originalHealth = 25;
+	asteroid.health = asteroid.originalHealth;
 	asteroid.isSpecial = true;
 }
 */
@@ -1347,10 +1482,11 @@ spawnAsteroid:
 	ldr r5, =asteroidSkin
 	str r5, [r4, #COSTUMEDENTITY_FIELD_COSTUME]
 
-	mov r5, #32
-	strh r5, [r4, #ASTEROID_FIELD_RADIUS]
+	mov r5, #5
+	strh r5, [r4, #ASTEROID_FIELD_SIZE]
 
 	mov r5, #25
+	strb r5, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
 	strb r5, [r4, #ASTEROID_FIELD_HEALTH]
 
 	mov r5, #1
@@ -1381,6 +1517,7 @@ spawnItem:
 	// r5 = x, r6 = y, r7 = isSpecial
 	mov r5, r0
 	mov r6, r1
+	mov r7, r2
 
 	// r4 = item
 	ldr r0, =itemBuff
