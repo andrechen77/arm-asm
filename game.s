@@ -2220,6 +2220,28 @@ divTenRem:
 	pop {r4, r5, pc}
 // end divTenRem
 
+/*
+rand: generates a pseudo-random number using a linear congruential generator.
+https://en.wikipedia.org/wiki/Linear_congruential_generator
+
+fn rand() -> u32 {
+	let static mut seed = 0xcafebabe;
+	seed = seed * 134775813 + 1; // allow wraparound overflowing
+	return seed;
+*/
+rand_seed:
+	.word 0xcafebabe
+rand_multiplier:
+	.word 134775813
+rand:
+	ldr r0, rand_seed
+	ldr r1, rand_multiplier
+	mul r0, r0, r1
+	add r0, r0, #1
+	str r0, rand_seed
+	bx lr
+// end rand
+
 .data
 // game assets and data here =======================================================================
 
