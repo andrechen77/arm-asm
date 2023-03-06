@@ -194,9 +194,11 @@ struct CostumedEntity {
 /*
 struct Bullet extends CostumedEntity {
 	damage: i8,
+	radius: i8,
 }
 */
 .EQU BULLET_FIELD_DAMAGE, COSTUMEDENTITY_SIZE
+.EQU BULLET_FIELD_RADIUS, COSTUMEDENTITY_SIZE + 1
 .EQU BULLET_SIZE, COSTUMEDENTITY_SIZE + 4 // add padding to align subsequent objects
 
 /*
@@ -757,7 +759,6 @@ fn processCollisions() {
 	forEachPair(bulletBuff, asteroidBuff, maybeCollideBulletAsteroid);
 	forEach(itemBuff, maybeCollideShipItem);
 	forEach(asteroidBuff, maybeCollideShipAsteroid);
-	// TODO all the other collisions
 }
 */
 processCollisions:
@@ -781,7 +782,7 @@ processCollisions:
 
 /*
 fn maybeCollideBulletAsteroid(asteroid: &mut Asteroid, bullet: &mut Bullet) {
-	if !checkIfWithinDistance(asteroid, bullet, 1 << asteroid.size) {
+	if !checkIfWithinDistance(asteroid, bullet, 1 << asteroid.size + bullet.speed) {
 		return;
 	}
 
@@ -805,6 +806,8 @@ maybeCollideBulletAsteroid:
 	ldrsh r2, [r0, #ASTEROID_FIELD_SIZE]
 	mov r3, #1
 	lsl r2, r3, r2
+	ldrsb r3, [r1, #BULLET_FIELD_RADIUS]
+	add r2, r2, r3
 	bl checkIfWithinDistance
 	cmp r0, #0
 	beq maybeCollideBulletAsteroid_done
@@ -1401,6 +1404,7 @@ fn spawnBullet(ship: &Ship) {
 	bullet.yVel = -ship.bulletSpeed;
 	bullet.costume = bulletSkinArray[ship.direction + 1];
 	bullet.damage = ship.bulletDamage;
+	bullet.radius = ship.bulletSpeed;
 }
 */
 spawnBullet:
@@ -1432,6 +1436,8 @@ spawnBullet:
 	strb r1, [r0, #ENTITY_FIELD_YVEL]
 
 	strb r7, [r0, #BULLET_FIELD_DAMAGE]
+
+	strb r8, [r0, #BULLET_FIELD_RADIUS]
 
 	ldr r1, =bulletSkinArray
 	add r2, r6, #1

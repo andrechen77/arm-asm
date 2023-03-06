@@ -24,7 +24,7 @@ check collisions between:
 	asteroids and bullets
 
 other todos:
-faster bullets have larger hit radius
+change bullet skin based on speed and damage
 add automatic meteor spawning based on how far in the game
 chance of special meteors that drop upgrade items
 eventually escape the asteroid field?
