@@ -52,7 +52,7 @@ struct KeyState {
 .EQU KEYSTATE_BITINDEXOF_PRESSED, 0
 .EQU KEYSTATE_BITINDEXOF_CHANGED, 1
 
-// let mut keyboardState: &[keyState; 512] = staticallocation;
+// let mut keyboardState: &[keyState; 512];
 // the index of a certain keyState in this array is equal to its PS/2 scan code, except for extended
 // keys, whose indices are their scan codes + 256
 keyboardState:
@@ -120,71 +120,71 @@ struct PixStatus {
 .EQU REG_PIX_BACKBUFFER, 0xff203024 // &&PixBuffer
 .EQU REG_PIX_STATUS, 0xff20302c // &PixStatus
 
-// let bufferA: &PixBuffer = staticallocation;
+// let bufferA: &PixBuffer;
 .align 2 // aligned to word because of str instruction in clearVga
 bufferA:
 	.skip PIXBUFFER_SIZE
 
-// let bufferB: &PixBuffer = staticallocation;
+// let bufferB: &PixBuffer;
 .align 2 // aligned to word because of str instruction in clearVga
 bufferB:
 	.skip PIXBUFFER_SIZE
 
 /*
 struct Entity {
-	lifetime: i16,
+	lifetime: i32,
 	// lifetime can be any value depending on the struct. The only requirement is that a 0 be used
 	// to indicate a dead Entity. In essence, every Entity is an optional value.
-	xPos: i16,
-	yPos: i16,
-	xVel: i8,
-	yVel: i8,
+	xPos: i32,
+	yPos: i32,
+	xVel: i16,
+	yVel: i16,
 }
 */
 .EQU ENTITY_FIELD_LIFETIME, 0
-.EQU ENTITY_FIELD_XPOS, 2
-.EQU ENTITY_FIELD_YPOS, 4
-.EQU ENTITY_FIELD_XVEL, 6
-.EQU ENTITY_FIELD_YVEL, 7
-.EQU ENTITY_SIZE, 8
+.EQU ENTITY_FIELD_XPOS, 4
+.EQU ENTITY_FIELD_YPOS, 8
+.EQU ENTITY_FIELD_XVEL, 12
+.EQU ENTITY_FIELD_YVEL, 14
+.EQU ENTITY_SIZE, 16
 
 /*
 struct Ship extends Entity {
-	direction: i8,
-	health: i8,
-	maxHealth: i8,
-	bulletSpeed: i8,
-	bulletDamage: i8,
+	health: i16,
+	maxHealth: i16,
+	bulletSpeed: i16,
+	bulletDamage: i16,
+	maxSpeed: i16,
 	currentFireCooldown: i8,
 	fireRate: i8,
-	maxSpeed: i8,
+	direction: i8,
 }
 // ships have their anchor in the center
 */
-.EQU SHIP_FIELD_DIRECTION, 8
-.EQU SHIP_FIELD_HEALTH, 9
-.EQU SHIP_FIELD_MAXHEALTH, 10
-.EQU SHIP_FIELD_BULLETSPEED, 11
-.EQU SHIP_FIELD_BULLETDAMAGE, 12
-.EQU SHIP_FIELD_CURRENTFIRECOOLDOWN, 13
-.EQU SHIP_FIELD_FIRERATE, 14
-.EQU SHIP_FIELD_MAXSPEED, 15
-.EQU SHIP_SIZE, 16
+.EQU SHIP_FIELD_HEALTH, ENTITY_SIZE
+.EQU SHIP_FIELD_MAXHEALTH, ENTITY_SIZE + 2
+.EQU SHIP_FIELD_BULLETSPEED, ENTITY_SIZE + 4
+.EQU SHIP_FIELD_BULLETDAMAGE, ENTITY_SIZE + 6
+.EQU SHIP_FIELD_MAXSPEED, ENTITY_SIZE + 8
+.EQU SHIP_FIELD_CURRENTFIRECOOLDOWN, ENTITY_SIZE + 10
+.EQU SHIP_FIELD_FIRERATE, ENTITY_SIZE + 11
+.EQU SHIP_FIELD_DIRECTION, ENTITY_SIZE + 12
+.EQU SHIP_SIZE, ENTITY_SIZE + 13
 
 // constants about the ship sprite (not associated with the Ship data type)
-.EQU SHIP_RADIUS, 16
+.EQU SHIP_RADIUS, 16 * 8
 
-// let ship: Ship = staticallocation;
-.align 1
+// let ship: &Ship;
+.align 2
 ship:
-	.hword 1
-	.hword 160, 120
-	.byte 0, 0
-	.byte 0
-	.byte 100, 100, 12, 50, 0, 30, 10
+	.word 1
+	.word 160 * 8, 120 * 8
+	.hword 0, 0
+	.hword 100, 100, 12 * 8, 50, 8 * 8
+	.byte 0, 30, 0
 
 /*
-struct CostumedEntity {
+struct CostumedEntity extends Entity {
 	costume: &Pixmap,
 }
 */
@@ -193,26 +193,26 @@ struct CostumedEntity {
 
 /*
 struct Bullet extends CostumedEntity {
-	damage: i8,
-	radius: i8,
+	radius: i16,
+	damage: i16,
 }
 */
-.EQU BULLET_FIELD_DAMAGE, COSTUMEDENTITY_SIZE
-.EQU BULLET_FIELD_RADIUS, COSTUMEDENTITY_SIZE + 1
-.EQU BULLET_SIZE, COSTUMEDENTITY_SIZE + 4 // add padding to align subsequent objects
+.EQU BULLET_FIELD_RADIUS, COSTUMEDENTITY_SIZE
+.EQU BULLET_FIELD_DAMAGE, COSTUMEDENTITY_SIZE + 2
+.EQU BULLET_SIZE, COSTUMEDENTITY_SIZE + 4
 
 /*
 struct Asteroid extends CostumedEntity {
+	originalHealth: i16,
+	health: i16,
 	size: i8,
-	health: i8,
-	originalHealth: i8,
 	isSpecial: bool,
 */
-.EQU ASTEROID_FIELD_SIZE, COSTUMEDENTITY_SIZE
-.EQU ASTEROID_FIELD_HEALTH, COSTUMEDENTITY_SIZE + 1
-.EQU ASTEROID_FIELD_ORIGINALHEALTH, COSTUMEDENTITY_SIZE	+ 2
-.EQU ASTEROID_FIELD_ISSPECIAL, COSTUMEDENTITY_SIZE + 3
-.EQU ASTEROID_SIZE, COSTUMEDENTITY_SIZE + 4
+.EQU ASTEROID_FIELD_ORIGINALHEALTH, COSTUMEDENTITY_SIZE
+.EQU ASTEROID_FIELD_HEALTH, COSTUMEDENTITY_SIZE + 2
+.EQU ASTEROID_FIELD_SIZE, COSTUMEDENTITY_SIZE + 4
+.EQU ASTEROID_FIELD_ISSPECIAL, COSTUMEDENTITY_SIZE + 5
+.EQU ASTEROID_SIZE, COSTUMEDENTITY_SIZE + 8 // padding to align subsequent objects
 
 /*
 struct Item extends CostumedEntity {
@@ -225,7 +225,7 @@ struct Item extends CostumedEntity {
 		UpgradeBulletDamage,
 		UpgradeFireRate,
 		UpgradeMaxSpeed,
-	}
+	} // underlying type u8
 }
 */
 .EQU ITEM_FIELD_ITEMTYPE, COSTUMEDENTITY_SIZE
@@ -250,7 +250,7 @@ struct Csb<T> {
 // Csb stands for "circular sparse buffer." The buffer is circular; an iterator that is incremented to
 // equal the capacity will wrap around to the beginning of the array. The "sparse" comes from the
 // fact that during iteration, some elements are skipped (considered "dead") depending on if first
-// halfword is 0. Therefore, T must be a type with at least size 2.
+// word is 0. Therefore, T must be a type with at least size 4.
 // Because of how the circular buffer works, the actual capacity is buff.capacity - 1.
 // A full-capacity buffer would have the begin and end iterators at the same position, but that
 // would actually indicate an empty buffer.
@@ -261,16 +261,16 @@ struct Csb<T> {
 .EQU CSB_FIELD_END, 12
 .EQU CSB_FIELD_DATA, 16
 
-// let bulletBuff: Csb<Bullet> = staticallocation;
+// let bulletBuff: &Csb<Bullet>;
 .align 2
 bulletBuff:
 	.word BULLET_SIZE
-	.word 128
+	.word 64
 	.word 0
 	.word 0
-	.skip 128 * BULLET_SIZE
+	.skip 64 * BULLET_SIZE
 
-// let asteroidBuff: Csb<Asteroid> = staticallocation;
+// let asteroidBuff: &Csb<Asteroid>;
 .align 2
 asteroidBuff:
 	.word ASTEROID_SIZE
@@ -279,7 +279,7 @@ asteroidBuff:
 	.word 0
 	.skip 32 * ASTEROID_SIZE
 
-// let itemBuff: Csb<Item> = staticallocation;
+// let itemBuff: &Csb<Item>;
 .align 2
 itemBuff:
 	.word ITEM_SIZE
@@ -288,13 +288,13 @@ itemBuff:
 	.word 0
 	.skip 64 * ITEM_SIZE
 
-// let mineralBank: u32 = staticallocation;
+// let mineralBank: u32 = 0;
 .align 2
 mineralBank:
 	.word 0
 
 // let mut tick: u32 = 0;
-.align 4
+.align 2
 tick:
 	.word 0
 
@@ -304,14 +304,14 @@ enum GameState {
 	InGame,
 	Paused,
 	DeathScreen,
-}
+} // underlying type u8
 */
 .EQU GAMESTATE_VARIANT_DEATHSCREEN, 0
 .EQU GAMESTATE_VARIANT_STARTSCREEN, 1
 .EQU GAMESTATE_VARIANT_INGAME, 2
 .EQU GAMESTATE_VARIANT_PAUSED, 3
 
-// let mut gameState: GameState = StartScreen;
+// let mut gameState: &GameState = GameState::StartScreen;
 gameState:
 	.byte GAMESTATE_VARIANT_STARTSCREEN
 
@@ -408,15 +408,17 @@ fn processPlayerInput() {
 
 	let xMove = (keyboardState.D.pressed as i32) - (keyboardState.A.pressed as i32);
 	if xMove != 0 {
-		ship.xVel += xMove * 2;
+		ship.xVel += xMove * 16;
 		if ship.xVel > ship.maxSpeed {
 			ship.xVel = ship.maxSpeed;
 		} else if ship.xVel < -ship.maxSpeed {
 			ship.xVel = -ship.maxSpeed;
 		}
 	} else {
-		ship.xVel -= sign(ship.xVel);
+		ship.xVel -= sign(ship.xVel) * 3;
 	}
+
+	// same for yVel
 
 	if ship.currentFireCoolDown <= 0 && keyboardState.I.pressed {
 		ship.currentFireCooldown += 100;
@@ -460,15 +462,15 @@ processPlayerInput:
 	sub r1, r1, r2
 
 	// r2 = ship.xVel
-	ldrsb r2, [r5, #ENTITY_FIELD_XVEL]
+	ldrsh r2, [r5, #ENTITY_FIELD_XVEL]
 
 	// if xMove != 0
-	cmp r1, #0
+	cmp r1, #0 // TODO optimize out?
 	beq processPlayerInput_dampenX
 
-	add r2, r2, r1, lsl #1
+	add r2, r2, r1, lsl #4
 	// r3 = ship.maxSpeed
-	ldrb r3, [r5, #SHIP_FIELD_MAXSPEED]
+	ldrsh r3, [r5, #SHIP_FIELD_MAXSPEED]
 	cmp r2, r3
 	bgt processPlayerInput_exceededMaxXVel
 	rsb r3, r3, #0
@@ -483,15 +485,15 @@ processPlayerInput_dampenX:
 
 	// r3 = -sign(ship.xVel);
 	cmp r2, #0
-	movlt r3, #1
-	movgt r3, #-1
+	movlt r3, #3
+	movgt r3, #-3
 	moveq r3, #0
 
 	add r2, r2, r3
 
 processPlayerInput_xVelCalcsDone:
 	// restore ship.xVel to memory
-	strb r2, [r5, #ENTITY_FIELD_XVEL]
+	strh r2, [r5, #ENTITY_FIELD_XVEL]
 
 	// r1 = yMove
 	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_S]
@@ -501,15 +503,15 @@ processPlayerInput_xVelCalcsDone:
 	sub r1, r1, r2
 
 	// r2 = ship.yVel
-	ldrsb r2, [r5, #ENTITY_FIELD_YVEL]
+	ldrsh r2, [r5, #ENTITY_FIELD_YVEL]
 
 	// if yMove != 0
 	cmp r1, #0
 	beq processPlayerInput_dampenY
 
-	add r2, r2, r1, lsl #1
+	add r2, r2, r1, lsl #4
 	// r3 = ship.maxSpeed
-	ldrb r3, [r5, #SHIP_FIELD_MAXSPEED]
+	ldrsh r3, [r5, #SHIP_FIELD_MAXSPEED]
 	cmp r2, r3
 	bgt processPlayerInput_exceededMaxYVel
 	rsb r3, r3, #0
@@ -524,15 +526,15 @@ processPlayerInput_dampenY:
 
 	// r3 = -sign(ship.yVel):
 	cmp r2, #0
-	movlt r3, #1
-	movgt r3, #-1
+	movlt r3, #3
+	movgt r3, #-3
 	moveq r3, #0
 
 	add r2, r2, r3
 
 processPlayerInput_yVelCalcsDone:
 	// restore ship.yVel to memory
-	strb r2, [r5, #ENTITY_FIELD_YVEL]
+	strh r2, [r5, #ENTITY_FIELD_YVEL]
 
 	// fire bullet
 	ldrsb r0, [r5, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
@@ -541,7 +543,7 @@ processPlayerInput_yVelCalcsDone:
 	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_I]
 	ands r1, r1, #1
 	beq processPlayerInput_noFire
-	ldrsb r0, [r5, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
+	ldrsb r0, [r5, #SHIP_FIELD_CURRENTFIRECOOLDOWN] // TODO optimize out?
 	add r0, r0, #100
 	strb r0, [r5, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
 	mov r0, r5
@@ -572,8 +574,8 @@ fn startGame() {
 	gameState = GameState::InGame;
 
 	if ship.lifetime == 0 {
-		ship.xPos = 160;
-		ship.yPos = 200;
+		ship.xPos = 160 * 8;
+		ship.yPos = 200 * 8;
 		ship.xVel = 0;
 		ship.yVel = 0;
 		ship.direction = 0;
@@ -581,11 +583,11 @@ fn startGame() {
 	ship.lifetime = 1;
 	ship.health = 20;
 	ship.maxHealth = 20;
-	ship.bulletSpeed = 4;
+	ship.bulletSpeed = 4 * 8;
 	ship.bulletDamage = 3;
 	ship.currentFireCooldown = 0;
 	ship.fireRate = 5;
-	ship.maxSpeed = 3;
+	ship.maxSpeed = 2 * 8;
 
 	// TODO turn on meteor spawning and stuff
 }
@@ -600,36 +602,36 @@ startGame:
 
 	// r0 = ship
 	ldr r0, =ship
-	ldrsh r1, [r0, #ENTITY_FIELD_LIFETIME]
+	ldr r1, [r0, #ENTITY_FIELD_LIFETIME]
 	cmp r1, #0
 	bne startGame_shipStillPresent
 
-	mov r1, #160
-	strh r1, [r0, #ENTITY_FIELD_XPOS]
-	mov r1, #200
-	strh r1, [r0, #ENTITY_FIELD_YPOS]
+	mov r1, #(160 * 8)
+	str r1, [r0, #ENTITY_FIELD_XPOS]
+	mov r1, #(200 * 8)
+	str r1, [r0, #ENTITY_FIELD_YPOS]
 	mov r1, #0
-	strb r1, [r0, #ENTITY_FIELD_XVEL]
-	strb r1, [r0, #ENTITY_FIELD_XVEL]
+	strh r1, [r0, #ENTITY_FIELD_XVEL]
+	strh r1, [r0, #ENTITY_FIELD_XVEL]
 	strb r1, [r0, #SHIP_FIELD_DIRECTION]
 
 startGame_shipStillPresent:
 
 	mov r1, #1
-	strb r1, [r0, #ENTITY_FIELD_LIFETIME]
+	str r1, [r0, #ENTITY_FIELD_LIFETIME]
 	mov r1, #20
-	strb r1, [r0, #SHIP_FIELD_HEALTH]
-	strb r1, [r0, #SHIP_FIELD_MAXHEALTH]
-	mov r1, #4
-	strb r1, [r0, #SHIP_FIELD_BULLETSPEED]
+	strh r1, [r0, #SHIP_FIELD_HEALTH]
+	strh r1, [r0, #SHIP_FIELD_MAXHEALTH]
+	mov r1, #(4 * 8)
+	strh r1, [r0, #SHIP_FIELD_BULLETSPEED]
 	mov r1, #3
-	strb r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
+	strh r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
+	mov r1, #(2 * 8)
+	strh r1, [r0, #SHIP_FIELD_MAXSPEED]
 	mov r1, #0
 	strb r1, [r0, #SHIP_FIELD_CURRENTFIRECOOLDOWN]
 	mov r1, #5
 	strb r1, [r0, #SHIP_FIELD_FIRERATE]
-	mov r1, #3
-	strb r1, [r0, #SHIP_FIELD_MAXSPEED]
 
 	bx lr
 // end startGame
@@ -693,22 +695,22 @@ fn moveEntityWithVoid(entity: &Entity) {
 moveEntityWithVoid:
 	// r0 = entity
 
-	ldrsh r1, [r0, #ENTITY_FIELD_LIFETIME]
+	ldr r1, [r0, #ENTITY_FIELD_LIFETIME]
 	cmp r1, #0
 	ble moveEntityWithVoid_noDecreaseLifetime
 	sub r1, r1, #1
-	strh r1, [r0, #ENTITY_FIELD_LIFETIME]
+	str r1, [r0, #ENTITY_FIELD_LIFETIME]
 moveEntityWithVoid_noDecreaseLifetime:
 
-	ldrh r1, [r0, #ENTITY_FIELD_XPOS]
-	ldrsb r2, [r0, #ENTITY_FIELD_XVEL]
+	ldr r1, [r0, #ENTITY_FIELD_XPOS]
+	ldrsh r2, [r0, #ENTITY_FIELD_XVEL]
 	add r1, r1, r2
-	strh r1, [r0, #ENTITY_FIELD_XPOS]
+	str r1, [r0, #ENTITY_FIELD_XPOS]
 
-	ldrh r1, [r0, #ENTITY_FIELD_YPOS]
-	ldrsb r2, [r0, #ENTITY_FIELD_YVEL]
+	ldr r1, [r0, #ENTITY_FIELD_YPOS]
+	ldrsh r2, [r0, #ENTITY_FIELD_YVEL]
 	add r1, r1, r2
-	strh r1, [r0, #ENTITY_FIELD_YPOS]
+	str r1, [r0, #ENTITY_FIELD_YPOS]
 
 	bx lr
 // end moveEntity
@@ -718,32 +720,32 @@ moveEntityBounded: updates the specified Entity's position based on its current 
 prevents the entity from moving off the screen.
 
 fn moveEntityBounded(entity: &Entity) {
-	entity.xPos = max(0, min(PIX_WIDTH, entity.xVel));
-	entity.yPos = max(0, min(PIX_HEIGHT, entity.yVel));
+	entity.xPos = max(0, min(PIX_WIDTH * 8, entity.xVel));
+	entity.yPos = max(0, min(PIX_HEIGHT * 8, entity.yVel));
 }
 */
 moveEntityBounded:
 	// r0 = entity
 
-	ldrh r1, [r0, #ENTITY_FIELD_XPOS]
-	ldrsb r2, [r0, #ENTITY_FIELD_XVEL]
+	ldr r1, [r0, #ENTITY_FIELD_XPOS]
+	ldrsh r2, [r0, #ENTITY_FIELD_XVEL]
 	adds r1, r1, r2
 	movlt r1, #0
 	blt moveEntityBounded_doneCalculatingX
-	cmp r1, #PIX_WIDTH
-	movgt r1, #PIX_WIDTH
+	cmp r1, #(PIX_WIDTH * 8)
+	movgt r1, #(PIX_WIDTH * 8)
 moveEntityBounded_doneCalculatingX:
-	strh r1, [r0, #ENTITY_FIELD_XPOS]
+	str r1, [r0, #ENTITY_FIELD_XPOS]
 
-	ldrh r1, [r0, #ENTITY_FIELD_YPOS]
-	ldrsb r2, [r0, #ENTITY_FIELD_YVEL]
+	ldr r1, [r0, #ENTITY_FIELD_YPOS]
+	ldrsh r2, [r0, #ENTITY_FIELD_YVEL]
 	adds r1, r1, r2
 	movlt r1, #0
 	blt moveEntityBounded_doneCalculatingY
-	cmp r1, #PIX_HEIGHT
-	movgt r1, #PIX_HEIGHT
+	cmp r1, #(PIX_HEIGHT * 8)
+	movgt r1, #(PIX_HEIGHT * 8)
 moveEntityBounded_doneCalculatingY:
-	strh r1, [r0, #ENTITY_FIELD_YPOS]
+	str r1, [r0, #ENTITY_FIELD_YPOS]
 
 	bx lr
 // end moveEntityBounded
@@ -803,21 +805,21 @@ maybeCollideBulletAsteroid:
 	mov r5, r1
 
 	// r0 and r1 already have the right values
-	ldrsh r2, [r0, #ASTEROID_FIELD_SIZE]
+	ldrsb r2, [r0, #ASTEROID_FIELD_SIZE]
 	mov r3, #1
 	lsl r2, r3, r2
-	ldrsb r3, [r1, #BULLET_FIELD_RADIUS]
+	ldrsh r3, [r1, #BULLET_FIELD_RADIUS]
 	add r2, r2, r3
 	bl checkIfWithinDistance
 	cmp r0, #0
 	beq maybeCollideBulletAsteroid_done
 
 	mov r0, #0
-	strb r0, [r5, #ENTITY_FIELD_LIFETIME]
-	ldrsb r1, [r4, #ASTEROID_FIELD_HEALTH]
-	ldrsb r2, [r5, #BULLET_FIELD_DAMAGE]
+	str r0, [r5, #ENTITY_FIELD_LIFETIME]
+	ldrsh r1, [r4, #ASTEROID_FIELD_HEALTH]
+	ldrsh r2, [r5, #BULLET_FIELD_DAMAGE]
 	subs r1, r1, r2
-	strb r1, [r4, #ASTEROID_FIELD_HEALTH]
+	strh r1, [r4, #ASTEROID_FIELD_HEALTH]
 	bgt maybeCollideBulletAsteroid_done
 
 	mov r0, r4
@@ -834,7 +836,7 @@ size (if the size is greater than 3), or turns the asteroid into an item (if the
 than 3). A special asteroid that splits will have a random one of its children be special.
 
 fn destroyAsteroid(asteroid: &mut Asteroid) {
-	if asteroid.size > 3 {
+	if asteroid.size > 6 {
 		let left = asteroid;
 		let right = addSpace(asteroidBuff);
 
@@ -881,17 +883,17 @@ destroyAsteroid:
 	// r0 = asteroid
 
 	ldrsb r1, [r0, #ASTEROID_FIELD_SIZE]
-	cmp r1, #3
+	cmp r1, #6
 	bgt destroyAsteroid_split
 
 	// asteroid.lifetime = 0;
 	mov r1, #0
-	strb r1, [r0, #ENTITY_FIELD_LIFETIME]
+	str r1, [r0, #ENTITY_FIELD_LIFETIME]
 
 	// spawnItem(...); r0 = ???
-	ldrsh r1, [r0, #ENTITY_FIELD_YPOS]
+	ldr r1, [r0, #ENTITY_FIELD_YPOS]
 	ldrb r2, [r0, #ASTEROID_FIELD_ISSPECIAL]
-	ldrsh r0, [r0, #ENTITY_FIELD_XPOS]
+	ldr r0, [r0, #ENTITY_FIELD_XPOS]
 	bl spawnItem
 
 	b destroyAsteroid_done
@@ -904,34 +906,34 @@ destroyAsteroid_split:
 	mov r5, r0
 
 	mov r0, #60
-	strb r0, [r4, #ENTITY_FIELD_LIFETIME]
-	strb r0, [r5, #ENTITY_FIELD_LIFETIME]
+	str r0, [r4, #ENTITY_FIELD_LIFETIME]
+	str r0, [r5, #ENTITY_FIELD_LIFETIME]
 
-	ldrsh r0, [r4, #ENTITY_FIELD_XPOS]
-	strh r0, [r5, #ENTITY_FIELD_XPOS]
-	ldrsh r0, [r4, #ENTITY_FIELD_YPOS]
-	strh r0, [r5, #ENTITY_FIELD_YPOS]
+	ldr r0, [r4, #ENTITY_FIELD_XPOS]
+	str r0, [r5, #ENTITY_FIELD_XPOS]
+	ldr r0, [r4, #ENTITY_FIELD_YPOS]
+	str r0, [r5, #ENTITY_FIELD_YPOS]
 
-	ldrsb r0, [r4, #ENTITY_FIELD_YVEL] // r0 = oldYVel
-	ldrsb r1, [r4, #ENTITY_FIELD_XVEL] // r1 = oldXVel
-	strb r0, [r5, #ENTITY_FIELD_XVEL]
+	ldrsh r0, [r4, #ENTITY_FIELD_YVEL] // r0 = oldYVel
+	ldrsh r1, [r4, #ENTITY_FIELD_XVEL] // r1 = oldXVel
+	strh r0, [r5, #ENTITY_FIELD_XVEL]
 	rsb r0, r0, #0
-	strb r0, [r4, #ENTITY_FIELD_XVEL]
-	strb r1, [r4, #ENTITY_FIELD_YVEL]
+	strh r0, [r4, #ENTITY_FIELD_XVEL]
+	strh r1, [r4, #ENTITY_FIELD_YVEL]
 	rsb r1, r1, #0
-	strb r1, [r5, #ENTITY_FIELD_YVEL]
+	strh r1, [r5, #ENTITY_FIELD_YVEL]
 
 	ldrb r0, [r4, #ASTEROID_FIELD_SIZE]
 	sub r0, r0, #1
 	strb r0, [r4, #ASTEROID_FIELD_SIZE]
 	strb r0, [r5, #ASTEROID_FIELD_SIZE]
 
-	ldrsb r0, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
+	ldrsh r0, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
 	asr r0, r0, #1
-	strb r0, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
-	strb r0, [r5, #ASTEROID_FIELD_ORIGINALHEALTH]
-	strb r0, [r4, #ASTEROID_FIELD_HEALTH]
-	strb r0, [r5, #ASTEROID_FIELD_HEALTH]
+	strh r0, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
+	strh r0, [r5, #ASTEROID_FIELD_ORIGINALHEALTH]
+	strh r0, [r4, #ASTEROID_FIELD_HEALTH]
+	strh r0, [r5, #ASTEROID_FIELD_HEALTH]
 
 	mov r0, #0
 	strb r0, [r5, #ASTEROID_FIELD_ISSPECIAL]
@@ -1006,19 +1008,19 @@ maybeCollideShipItem:
 
 	// maybe early return
 
-	ldrsh r0, [r5, #ENTITY_FIELD_LIFETIME]
+	ldr r0, [r5, #ENTITY_FIELD_LIFETIME]
 	cmp r0, #0
 	beq maybeCollideShipItem_done
 
 	// r0 = square(item.xPos - ship.xPos)
-	ldrsh r0, [r4, #ENTITY_FIELD_XPOS]
-	ldrsh r1, [r5, #ENTITY_FIELD_XPOS]
+	ldr r0, [r4, #ENTITY_FIELD_XPOS]
+	ldr r1, [r5, #ENTITY_FIELD_XPOS]
 	sub r1, r0, r1
 	mul r0, r1, r1
 
 	// r1 = square(item.yPos - ship.yPos)
-	ldrsh r1, [r4, #ENTITY_FIELD_YPOS]
-	ldrsh r2, [r5, #ENTITY_FIELD_YPOS]
+	ldr r1, [r4, #ENTITY_FIELD_YPOS]
+	ldr r2, [r5, #ENTITY_FIELD_YPOS]
 	sub r2, r1, r2
 	mul r1, r2, r2
 
@@ -1051,8 +1053,8 @@ maybeCollideShipItem_caseMineral:
 maybeCollideShipItem_caseHealthKit:
 
 	ldr r0, =ship
-	ldrsb r1, [r0, #SHIP_FIELD_MAXHEALTH]
-	strb r1, [r0, #SHIP_FIELD_HEALTH]
+	ldrsh r1, [r0, #SHIP_FIELD_MAXHEALTH]
+	strh r1, [r0, #SHIP_FIELD_HEALTH]
 
 	b maybeCollideShipItem_done
 maybeCollideShipItem_caseInvulnerability:
@@ -1063,25 +1065,25 @@ maybeCollideShipItem_caseInvulnerability:
 maybeCollideShipItem_caseUpgradeMaxHealth:
 
 	ldr r0, =ship
-	ldrsb r1, [r0, #SHIP_FIELD_MAXHEALTH]
+	ldrsh r1, [r0, #SHIP_FIELD_MAXHEALTH]
 	add r1, r1, #1
-	strb r1, [r0, #SHIP_FIELD_MAXHEALTH]
+	strh r1, [r0, #SHIP_FIELD_MAXHEALTH]
 
 	b maybeCollideShipItem_done
 maybeCollideShipItem_caseUpgradeBulletSpeed:
 
 	ldr r0, =ship
-	ldrsb r1, [r0, #SHIP_FIELD_BULLETSPEED]
+	ldrsh r1, [r0, #SHIP_FIELD_BULLETSPEED]
 	add r1, r1, #1
-	strb r1, [r0, #SHIP_FIELD_BULLETSPEED]
+	strh r1, [r0, #SHIP_FIELD_BULLETSPEED]
 
 	b maybeCollideShipItem_done
 maybeCollideShipItem_caseUpgradeBulletDamage:
 
 	ldr r0, =ship
-	ldrsb r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
+	ldrsh r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
 	add r1, r1, #1
-	strb r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
+	strh r1, [r0, #SHIP_FIELD_BULLETDAMAGE]
 
 	b maybeCollideShipItem_done
 maybeCollideShipItem_caseUpgradeFireRate:
@@ -1095,9 +1097,9 @@ maybeCollideShipItem_caseUpgradeFireRate:
 maybeCollideShipItem_caseUpgradeMaxSpeed:
 
 	ldr r0, =ship
-	ldrsb r1, [r0, #SHIP_FIELD_MAXSPEED]
-	add r1, r1, #1
-	strb r1, [r0, #SHIP_FIELD_MAXSPEED]
+	ldrsh r1, [r0, #SHIP_FIELD_MAXSPEED]
+	add r1, r1, #2
+	strh r1, [r0, #SHIP_FIELD_MAXSPEED]
 
 maybeCollideShipItem_done:
 	pop {r4-r5, pc}
@@ -1136,19 +1138,19 @@ maybeCollideShipAsteroid:
 	// r1 = ship
 	ldr r1, =ship
 
-	ldrsh r2, [r1, #ENTITY_FIELD_LIFETIME]
+	ldr r2, [r1, #ENTITY_FIELD_LIFETIME]
 	cmp r2, #0
 	beq maybeCollideShipAsteroid_earlyReturn
 
 	// r2 = square(ship.xPos - asteroid.xPos)
-	ldrsh r2, [r1, #ENTITY_FIELD_XPOS]
-	ldrsh r3, [r0, #ENTITY_FIELD_XPOS]
+	ldr r2, [r1, #ENTITY_FIELD_XPOS]
+	ldr r3, [r0, #ENTITY_FIELD_XPOS]
 	sub r3, r2, r3
 	mul r2, r3, r3
 
 	// r3 = square(ship.yPos - asteroid.yPos)
-	ldrsh r3, [r1, #ENTITY_FIELD_YPOS]
-	ldrsh r4, [r0, #ENTITY_FIELD_YPOS]
+	ldr r3, [r1, #ENTITY_FIELD_YPOS]
+	ldr r4, [r0, #ENTITY_FIELD_YPOS]
 	sub r4, r3, r4
 	mul r3, r4, r4
 
@@ -1156,7 +1158,7 @@ maybeCollideShipAsteroid:
 	add r2, r2, r3
 
 	// skip if out of range
-	ldrsh r4, [r0, #ASTEROID_FIELD_SIZE]
+	ldrsb r4, [r0, #ASTEROID_FIELD_SIZE]
 	mov r3, #1
 	lsl r4, r3, r4
 	mul r3, r4, r4
@@ -1169,13 +1171,13 @@ maybeCollideShipAsteroid:
 
 	// asteroid.lifetime = 0;
 	mov r2, #0
-	strh r2, [r0, #ENTITY_FIELD_LIFETIME]
+	str r2, [r0, #ENTITY_FIELD_LIFETIME]
 
 	// ship.health -= asteroid.health; r2 = ??? r3 = ???
-	ldrsb r2, [r1, #SHIP_FIELD_HEALTH]
-	ldrsb r3, [r0, #ASTEROID_FIELD_HEALTH]
+	ldrsh r2, [r1, #SHIP_FIELD_HEALTH]
+	ldrsh r3, [r0, #ASTEROID_FIELD_HEALTH]
 	subs r2, r2, r3
-	strb r2, [r1, #SHIP_FIELD_HEALTH]
+	strh r2, [r1, #SHIP_FIELD_HEALTH]
 	bllt killShip
 
 maybeCollideShipAsteroid_earlyReturn:
@@ -1191,14 +1193,14 @@ checkIfWithinDistance:
 	push {r4}
 
 	// r3 = square(b.xPos - a.xPos)
-	ldrsh r3, [r1, #ENTITY_FIELD_XPOS]
-	ldrsh r4, [r0, #ENTITY_FIELD_XPOS]
+	ldr r3, [r1, #ENTITY_FIELD_XPOS]
+	ldr r4, [r0, #ENTITY_FIELD_XPOS]
 	sub r4, r3, r4
 	mul r3, r4, r4
 
 	// r1 = square(b.xPos - a.xPos) + square(b.yPos - a.yPos)
-	ldrsh r1, [r1, #ENTITY_FIELD_YPOS]
-	ldrsh r0, [r0, #ENTITY_FIELD_YPOS]
+	ldr r1, [r1, #ENTITY_FIELD_YPOS]
+	ldr r0, [r0, #ENTITY_FIELD_YPOS]
 	sub r0, r1, r0
 	mla r1, r0, r0, r3
 
@@ -1220,7 +1222,7 @@ fn killShip() {
 killShip:
 	ldr r0, =ship
 	mov r1, #0
-	strb r1, [r0, #ENTITY_FIELD_LIFETIME]
+	str r1, [r0, #ENTITY_FIELD_LIFETIME]
 
 	ldr r0, =gameState
 	mov r1, #GAMESTATE_VARIANT_DEATHSCREEN
@@ -1412,32 +1414,32 @@ spawnBullet:
 	// r0 = ship
 
 	// r4 = ship.xPos, r5 = ship.yPos, r6 = ship.direction, r7 = ship.bulletDamage, r8 = ship.bulletSpeed
-	ldrsh r4, [r0, #ENTITY_FIELD_XPOS]
-	ldrsh r5, [r0, #ENTITY_FIELD_YPOS]
+	ldr r4, [r0, #ENTITY_FIELD_XPOS]
+	ldr r5, [r0, #ENTITY_FIELD_YPOS]
 	ldrsb r6, [r0, #SHIP_FIELD_DIRECTION]
-	ldrsb r7, [r0, #SHIP_FIELD_BULLETDAMAGE]
-	ldrsb r8, [r0, #SHIP_FIELD_BULLETSPEED]
+	ldrsh r7, [r0, #SHIP_FIELD_BULLETDAMAGE]
+	ldrsh r8, [r0, #SHIP_FIELD_BULLETSPEED]
 
 	// r0 = bullet
 	ldr r0, =bulletBuff
 	bl addSpace
 
 	mov r1, #30
-	strh r1, [r0, #ENTITY_FIELD_LIFETIME]
+	str r1, [r0, #ENTITY_FIELD_LIFETIME]
 
-	strh r4, [r0, #ENTITY_FIELD_XPOS]
+	str r4, [r0, #ENTITY_FIELD_XPOS]
 
-	strh r5, [r0, #ENTITY_FIELD_YPOS]
+	str r5, [r0, #ENTITY_FIELD_YPOS]
 
 	mul r1, r6, r8
-	strb r1, [r0, #ENTITY_FIELD_XVEL]
+	strh r1, [r0, #ENTITY_FIELD_XVEL]
 
 	rsb r1, r8, #0
-	strb r1, [r0, #ENTITY_FIELD_YVEL]
+	strh r1, [r0, #ENTITY_FIELD_YVEL]
 
-	strb r7, [r0, #BULLET_FIELD_DAMAGE]
+	strh r7, [r0, #BULLET_FIELD_DAMAGE]
 
-	strb r8, [r0, #BULLET_FIELD_RADIUS]
+	strh r8, [r0, #BULLET_FIELD_RADIUS]
 
 	ldr r1, =bulletSkinArray
 	add r2, r6, #1
@@ -1451,12 +1453,12 @@ spawnBullet:
 fn spawnAsteroid() {
 	let asteroid: &mut Asteroid = addSpace(asteroidBuff);
 	asteroid.lifetime = 60;
-	asteroid.xPos = 200;
-	asteroid.yPos = -10;
-	asteroid.xVel = -2;
-	asteroid.yVel = 4;
+	asteroid.xPos = 200 * 8;
+	asteroid.yPos = -10 * 8;
+	asteroid.xVel = -2 * 8;
+	asteroid.yVel = 4 * 8;
 	asteroid.costume = shipSkinForward;
-	asteroid.size = 5;
+	asteroid.size = 8;
 	asteroid.originalHealth = 25;
 	asteroid.health = asteroid.originalHealth;
 	asteroid.isSpecial = true;
@@ -1471,29 +1473,29 @@ spawnAsteroid:
 	mov r4, r0
 
 	mov r5, #60
-	strh r5, [r4, #ENTITY_FIELD_LIFETIME]
+	str r5, [r4, #ENTITY_FIELD_LIFETIME]
 
-	mov r5, #200
-	strh r5, [r4, #ENTITY_FIELD_XPOS]
+	mov r5, #(200 * 8)
+	str r5, [r4, #ENTITY_FIELD_XPOS]
 
-	mov r5, #-10
-	strh r5, [r4, #ENTITY_FIELD_YPOS]
+	mov r5, #(-10 * 8)
+	str r5, [r4, #ENTITY_FIELD_YPOS]
 
-	mov r5, #-2
-	strb r5, [r4, #ENTITY_FIELD_XVEL]
+	mov r5, #(-2 * 8)
+	strh r5, [r4, #ENTITY_FIELD_XVEL]
 
-	mov r5, #4
-	strb r5, [r4, #ENTITY_FIELD_YVEL]
+	mov r5, #(4 * 8)
+	strh r5, [r4, #ENTITY_FIELD_YVEL]
 
 	ldr r5, =asteroidSkin
 	str r5, [r4, #COSTUMEDENTITY_FIELD_COSTUME]
 
-	mov r5, #5
-	strh r5, [r4, #ASTEROID_FIELD_SIZE]
+	mov r5, #8
+	strb r5, [r4, #ASTEROID_FIELD_SIZE]
 
 	mov r5, #25
-	strb r5, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
-	strb r5, [r4, #ASTEROID_FIELD_HEALTH]
+	strh r5, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
+	strh r5, [r4, #ASTEROID_FIELD_HEALTH]
 
 	mov r5, #1
 	strb r5, [r4, #ASTEROID_FIELD_ISSPECIAL]
@@ -1502,7 +1504,7 @@ spawnAsteroid:
 // end spawnAsteroid
 
 /*
-fn spawnItem(x: i16, y: i16, isSpecial: bool) {
+fn spawnItem(x: i32, y: i32, isSpecial: bool) {
 	let item: &mut Item = addSpace(itemBuff);
 	item.lifetime = 100;
 	item.xPos = x;
@@ -1531,14 +1533,14 @@ spawnItem:
 	mov r4, r0
 
 	mov r0, #100
-	strh r0, [r4, #ENTITY_FIELD_LIFETIME]
+	str r0, [r4, #ENTITY_FIELD_LIFETIME]
 
-	strh r5, [r4, #ENTITY_FIELD_XPOS]
-	strh r6, [r4, #ENTITY_FIELD_YPOS]
+	str r5, [r4, #ENTITY_FIELD_XPOS]
+	str r6, [r4, #ENTITY_FIELD_YPOS]
 
 	mov r0, #0
-	strb r0, [r4, #ENTITY_FIELD_XVEL]
-	strb r0, [r4, #ENTITY_FIELD_YVEL]
+	strh r0, [r4, #ENTITY_FIELD_XVEL]
+	strh r0, [r4, #ENTITY_FIELD_YVEL]
 
 	// r7 = item.itemType
 	cmp r7, #0
@@ -1727,7 +1729,7 @@ renderFrame:
 
 	// draw Player
 	ldr r3, =ship
-	ldrsb r2, [r3, #ENTITY_FIELD_LIFETIME]
+	ldr r2, [r3, #ENTITY_FIELD_LIFETIME]
 	cmp r2, #0
 	beq renderFrame_skipDrawPlayer
 	mov r0, r4
@@ -1735,8 +1737,8 @@ renderFrame:
 	add r2, r2, #1
 	ldr r1, =shipSkinArray
 	ldr r1, [r1, r2, lsl #2]
-	ldrh r2, [r3, #ENTITY_FIELD_XPOS]
-	ldrh r3, [r3, #ENTITY_FIELD_YPOS]
+	ldr r2, [r3, #ENTITY_FIELD_XPOS]
+	ldr r3, [r3, #ENTITY_FIELD_YPOS]
 	bl bitBlit
 renderFrame_skipDrawPlayer:
 
@@ -1794,7 +1796,7 @@ renderFrame_gameStateDone:
 
 	mov r0, #4
 	mov r1, #50
-	ldrsb r2, [r4, #SHIP_FIELD_HEALTH]
+	ldrsh r2, [r4, #SHIP_FIELD_HEALTH]
 	bl drawNum
 
 	mov r0, #1
@@ -1804,7 +1806,7 @@ renderFrame_gameStateDone:
 
 	mov r0, #4
 	mov r1, #51
-	ldrsb r2, [r4, #SHIP_FIELD_MAXHEALTH]
+	ldrsh r2, [r4, #SHIP_FIELD_MAXHEALTH]
 	bl drawNum
 
 	mov r0, #1
@@ -1814,7 +1816,7 @@ renderFrame_gameStateDone:
 
 	mov r0, #4
 	mov r1, #52
-	ldrsb r2, [r4, #SHIP_FIELD_BULLETSPEED]
+	ldrsh r2, [r4, #SHIP_FIELD_BULLETSPEED]
 	bl drawNum
 
 	mov r0, #1
@@ -1824,7 +1826,7 @@ renderFrame_gameStateDone:
 
 	mov r0, #4
 	mov r1, #53
-	ldrsb r2, [r4, #SHIP_FIELD_BULLETDAMAGE]
+	ldrsh r2, [r4, #SHIP_FIELD_BULLETDAMAGE]
 	bl drawNum
 
 	mov r0, #1
@@ -1854,7 +1856,7 @@ renderFrame_gameStateDone:
 
 	mov r0, #4
 	mov r1, #56
-	ldrsb r2, [r4, #SHIP_FIELD_MAXSPEED]
+	ldrsh r2, [r4, #SHIP_FIELD_MAXSPEED]
 	bl drawNum
 
 	mov r0, #1
@@ -1906,8 +1908,8 @@ renderCostumedEntity:
 	mov r3, r0
 	mov r0, r1
 	ldr r1, [r3, #COSTUMEDENTITY_FIELD_COSTUME]
-	ldrsh r2, [r3, #ENTITY_FIELD_XPOS]
-	ldrsh r3, [r3, #ENTITY_FIELD_YPOS]
+	ldr r2, [r3, #ENTITY_FIELD_XPOS]
+	ldr r3, [r3, #ENTITY_FIELD_YPOS]
 	bl bitBlit
 
 	pop {pc}
@@ -2055,8 +2057,8 @@ coordinates. If the image goes past the VGA screen boundaries, pixels are not dr
 
 fn bitBlit(buffer: *PixBuffer, p: *Pixmap, x: i32, y: i32) {
 	// convert center coordinates to top left corner coordinates
-	let y = y - p.anchorY;
-	let x = x - p.anchorX;
+	let y = y >> 3 - p.anchorY;
+	let x = x >> 3 - p.anchorX;
 
 	// find the portion of the pixmap to draw
 	let start_row = max(0, -y);
@@ -2085,9 +2087,9 @@ bitBlit:
 
 	// r2 = x, r3 = y
 	ldrh r4, [r1, #PIXMAP_FIELD_ANCHORX]
-	sub r2, r2, r4
+	rsb r2, r4, r2, asr #3
 	ldrh r4, [r1, #PIXMAP_FIELD_ANCHERY]
-	sub r3, r3, r4
+	rsb r3, r4, r3, asr #3
 
 	// r6 = start_col
 	rsbs r6, r2, #0
