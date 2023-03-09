@@ -1,30 +1,4 @@
-spaceship game data
-
-struct Particle extends Entity {
-	color: u16,
-}
-
-struct Animation extends Entity {
-	frames: &[Pixmap],
-	numFrames: u32,
-}
-
-Ship
-Csb<Asteroid>
-Csb<Bullet>
-Csb<Item>
-Csb<Particle>
-Csb<Animation>
-Csb<Explosion>
-
-check collisions between:
-	spaceship and items
-	spaceship and asteroids
-	asteroids and asteroids
-	asteroids and bullets
-
-other todos:
-change bullet skin based on speed and damage
-add automatic meteor spawning based on how far in the game
-chance of special meteors that drop upgrade items
-eventually escape the asteroid field?
+mario invulnerability
+extract config to top of file
+shaking background
+better visuals for health and fire rate

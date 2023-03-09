@@ -7,9 +7,8 @@ itself along the way in order to survive the deadly asteroids.
 
 Advanced features implemented:
  * Special visual effects (screen shakes and animated explosions) TODO
- * Sound and music PROBABLYNOTGONNADO
  * Massive number of active discernable sprites
- * Scrolling background TODO
+ * Scrolling background
  * Non-constant velocity using WASD
  * In-flight projectiles triggered by player input
  * Power-ups
@@ -20,7 +19,7 @@ How to play the game:
  * Shoot asteroids to gain minerals, which are used to buy stat upgrades.
  * Special asteroids can drop items like health kits, mario super stars, or instant stat upgrades.
  * Asteroids get stronger and more frequent as the game progresses.
- * Survive until the end to win--but beware it gets kinda crazy.
+ * Survive as long as possible, destroying asteroids to rack up score.
 
 The whole game is in one file because it's of school's submission requirements.
 Intended to run on https://cpulator.01xz.net/?sys=arm-de1soc
@@ -120,12 +119,12 @@ struct PixStatus {
 .EQU REG_PIX_BACKBUFFER, 0xff203024 // &&PixBuffer
 .EQU REG_PIX_STATUS, 0xff20302c // &PixStatus
 
-// let bufferA: &PixBuffer;
+// let bufferA: &mut PixBuffer;
 .align 2 // aligned to word because of str instruction in clearVga
 bufferA:
 	.skip PIXBUFFER_SIZE
 
-// let bufferB: &PixBuffer;
+// let bufferB: &mut PixBuffer;
 .align 2 // aligned to word because of str instruction in clearVga
 bufferB:
 	.skip PIXBUFFER_SIZE
@@ -174,7 +173,7 @@ struct Ship extends Entity {
 // constants about the ship sprite (not associated with the Ship data type)
 .EQU SHIP_RADIUS, 16 * 8
 
-// let ship: &Ship;
+// let ship: &mut Ship;
 .align 2
 ship:
 	.word 1
@@ -271,7 +270,7 @@ struct Csb<T> {
 .EQU CSB_FIELD_END, 12
 .EQU CSB_FIELD_DATA, 16
 
-// let bulletBuff: &Csb<Bullet>;
+// let mut bulletBuff: &Csb<Bullet>;
 .align 2
 bulletBuff:
 	.word BULLET_SIZE
@@ -280,7 +279,7 @@ bulletBuff:
 	.word 0
 	.skip 64 * BULLET_SIZE
 
-// let asteroidBuff: &Csb<Asteroid>;
+// let mut asteroidBuff: &Csb<Asteroid>;
 .align 2
 asteroidBuff:
 	.word ASTEROID_SIZE
@@ -289,7 +288,7 @@ asteroidBuff:
 	.word 0
 	.skip 32 * ASTEROID_SIZE
 
-// let itemBuff: &Csb<Item>;
+// let mut itemBuff: &Csb<Item>;
 .align 2
 itemBuff:
 	.word ITEM_SIZE
@@ -298,7 +297,7 @@ itemBuff:
 	.word 0
 	.skip 64 * ITEM_SIZE
 
-// let animationBuff: &Csb<Animation>;
+// let mut animationBuff: &Csb<Animation>;
 .align 2
 animationBuff:
 	.word ANIMATION_SIZE
@@ -307,7 +306,7 @@ animationBuff:
 	.word 0
 	.skip 16 * ANIMATION_SIZE
 
-// let mineralBank: u32 = 0;
+// let mut mineralBank: u32 = 0;
 .align 2
 mineralBank:
 	.word 0
@@ -315,6 +314,12 @@ mineralBank:
 // let mut tick: u32 = 0;
 .align 2
 tick:
+	.word 0
+
+// let mut scores: (u32, u32) = (0, 0); // (score, highScore)
+.align 2
+scores:
+	.word 0
 	.word 0
 
 /*
@@ -484,7 +489,7 @@ advanceFrame:
 	bl trimCsb
 
 	ldr r0, =gameState
-	ldr r0, [r0]
+	ldrb r0, [r0]
 	cmp r0, #GAMESTATE_VARIANT_INGAME
 	bne advanceFrame_noTick
 
@@ -510,8 +515,6 @@ advanceFrame_noTick:
 
 	pop {r4-r6, pc}
 // end advanceFrame
-
-.LTORG
 
 /*
 asteroidSpawner: either counts down a timer for the next asteroid spawn, or if the timer has just
@@ -634,6 +637,8 @@ asteroidSpawner_astSizeFound:
 
 	pop {r4-r6, pc}
 // end asteroidSpawner
+
+.ltorg
 
 /*
 cometSpawner: either counts down a timer for the next comet spawn, or if the timer has just
@@ -924,6 +929,7 @@ fn startGame() {
 
 	gameState = GameState::InGame;
 	tick = 0;
+	scores.0 = 0;
 }
 */
 startGame:
@@ -974,7 +980,10 @@ startGame_shipStillPresent:
 
 	ldr r0, =tick
 	mov r1, #0
-	strb r1, [r0]
+	str r1, [r0]
+
+	ldr r0, =scores
+	str r1, [r0, #0] // using r1 = 0
 
 	bx lr
 // end startGame
@@ -1206,6 +1215,8 @@ size (if the size is greater than 3), or turns the asteroid into an item (if the
 than 3). A special asteroid that splits will have a random one of its children be special.
 
 fn destroyAsteroid(asteroid: &mut Asteroid) {
+	scores.0 += asteroid.health;
+
 	let explosion = addSpace(animationBuff);
 	explosion.lifetime = 9;
 	explosion.xPos = asteroid.xPos;
@@ -1263,6 +1274,12 @@ destroyAsteroid:
 
 	// r4 = asteroid
 	mov r4, r0
+
+	ldr r0, =scores
+	ldr r1, [r0, #0]
+	ldrsh r2, [r4, #ASTEROID_FIELD_ORIGINALHEALTH]
+	add r1, r1, r2
+	str r1, [r0, #0]
 
 	// r0 = explosion
 	ldr r0, =animationBuff
@@ -1621,6 +1638,7 @@ checkIfWithinDistance:
 fn killShip() {
 	ship.lifetime = 0;
 	gameState = GameState::DeathScreen;
+	scores.1 = max(scores.1, scores.0);
 }
 */
 killShip:
@@ -1631,6 +1649,13 @@ killShip:
 	ldr r0, =gameState
 	mov r1, #GAMESTATE_VARIANT_DEATHSCREEN
 	strb r1, [r0]
+
+	ldr r0, =scores
+	ldr r1, [r0, #0]
+	ldr r2, [r0, #4]
+	cmp r1, r2
+	movlt r1, r2
+	str r1, [r0, #4]
 
 	bx lr
 // end killShip
@@ -2085,13 +2110,18 @@ fn renderFrame(buffer: &PixBuffer) {
 
 	clearTextBuffer();
 	drawNum(0, 0, tick);
+	drawStr(1, 1, "Score:");
+	drawNum(7, 1, score.0);
 	match gameState {
-		GameState::DeathScreen => drawStr(34, 50, "You died! :("),
+		GameState::DeathScreen => {
+			drawStr(34, 30, "You died! :(");
+			drawStr(30, 50, "High score:");
+			drawNum(42, 50, scores.1);
+		},
 		GameState::StartScreen => drawStr(34, 50, "Press SPACE!"),
 		GameState::Paused =>      drawStr(34, 50, "Game Paused"),
 		_ => (),
 	}
-	// TODO show stats
 	drawStr(1, 50, "HP");
 	drawNum(4, 50, ship.health);
 	drawStr(1, 51, "FC")
@@ -2165,11 +2195,28 @@ renderFrame_skipDrawPlayer:
 
 	bl clearTextBuffer
 
-	// drawNum(0, 0, tick)
+	// drawNum(0, 0, tick);
 	mov r0, #0
 	mov r1, #0
 	ldr r2, =tick
 	ldr r2, [r2]
+	bl drawNum
+
+	// drawStr(1, 1, "Score:");
+	mov r0, #1
+	mov r1, #1
+	ldr r2, =renderFrame_stringScore
+	bl drawStr
+.data
+renderFrame_stringScore:
+	.asciz "Score:"
+.text
+
+	// drawNum(7, 1, score.0);
+	mov r0, #7
+	mov r1, #1
+	ldr r2, =scores
+	ldr r2, [r2, #0]
 	bl drawNum
 
 	// print game state
@@ -2184,10 +2231,28 @@ renderFrame_skipDrawPlayer:
 	b renderFrame_gameStateDone
 renderFrame_deathScreen:
 
+	// drawStr(34, 30, "You died! :(");
 	mov r0, #34
-	mov r1, #50
+	mov r1, #30
 	ldr r2, =deathMessage
 	bl drawStr
+
+	// drawStr(30, 50, "High score:");
+	mov r0, #30
+	mov r1, #50
+	ldr r2, =renderFrame_stringHighScore
+	bl drawStr
+.data
+renderFrame_stringHighScore:
+	.asciz "High score:"
+.text
+
+	// drawNum(42, 50, scores.1);
+	mov r0, #42
+	mov r1, #50
+	ldr r2, =scores
+	ldr r2, [r2, #4]
+	bl drawNum
 
 	b renderFrame_gameStateDone
 renderFrame_startScreen:
