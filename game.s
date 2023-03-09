@@ -923,6 +923,7 @@ fn startGame() {
 	ship.maxSpeed = 2 * 8;
 
 	gameState = GameState::InGame;
+	tick = 0;
 }
 */
 startGame:
@@ -969,6 +970,10 @@ startGame_shipStillPresent:
 	// r0 = gameState
 	ldr r0, =gameState
 	mov r1, #GAMESTATE_VARIANT_INGAME
+	strb r1, [r0]
+
+	ldr r0, =tick
+	mov r1, #0
 	strb r1, [r0]
 
 	bx lr
