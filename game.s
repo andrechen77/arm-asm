@@ -292,10 +292,10 @@ bulletBuff:
 .align 2
 asteroidBuff:
 	.word ASTEROID_SIZE
-	.word 32
+	.word 128
 	.word 0
 	.word 0
-	.skip 32 * ASTEROID_SIZE
+	.skip 128 * ASTEROID_SIZE
 
 // let mut itemBuff: &Csb<Item>;
 .align 2
