@@ -1633,7 +1633,7 @@ fn maybeCollideShipAsteroid(asteroid: &mut Asteroid) {
 	let distanceSquare = square(ship.xPos - asteroid.xPos) + square(ship.yPos - asteroid.yPos);
 	if distanceSquare <= square(1 << asteroid.size) + square(SHIP_RADIUS) {
 		ship.health -= asteroid.health;
-		asteroid.lifetime = 0;
+		destroyAsteroid(asteroid);
 		if ship.health <= 0 {
 			killShip();
 		}
@@ -1643,51 +1643,51 @@ fn maybeCollideShipAsteroid(asteroid: &mut Asteroid) {
 maybeCollideShipAsteroid:
 	push {r4-r5, lr}
 
-	// r0 = asteroid
+	// r4 = asteroid, r5 = ship
+	mov r4, r0
+	ldr r5, =ship
 
-	// r1 = ship
-	ldr r1, =ship
-
-	ldr r2, [r1, #ENTITY_FIELD_LIFETIME]
+	ldr r2, [r5, #ENTITY_FIELD_LIFETIME]
 	cmp r2, #0
 	beq maybeCollideShipAsteroid_earlyReturn
 
 	// r2 = square(ship.xPos - asteroid.xPos)
-	ldr r2, [r1, #ENTITY_FIELD_XPOS]
-	ldr r3, [r0, #ENTITY_FIELD_XPOS]
+	ldr r2, [r5, #ENTITY_FIELD_XPOS]
+	ldr r3, [r4, #ENTITY_FIELD_XPOS]
 	sub r3, r2, r3
 	mul r2, r3, r3
 
 	// r3 = square(ship.yPos - asteroid.yPos)
-	ldr r3, [r1, #ENTITY_FIELD_YPOS]
-	ldr r4, [r0, #ENTITY_FIELD_YPOS]
-	sub r4, r3, r4
-	mul r3, r4, r4
+	ldr r3, [r5, #ENTITY_FIELD_YPOS]
+	ldr r0, [r4, #ENTITY_FIELD_YPOS]
+	sub r0, r3, r0
+	mul r3, r0, r0
 
 	// r2 = distanceSquare
 	add r2, r2, r3
 
 	// skip if out of range
-	ldrsb r4, [r0, #ASTEROID_FIELD_SIZE]
+	ldrsb r0, [r4, #ASTEROID_FIELD_SIZE]
 	mov r3, #1
-	lsl r4, r3, r4
-	mul r3, r4, r4
-	mov r4, #SHIP_RADIUS
-	mla r3, r4, r4, r3
+	lsl r0, r3, r0
+	mul r3, r0, r0
+	mov r0, #SHIP_RADIUS
+	mla r3, r0, r0, r3
 	cmp r2, r3
+	// r2 = ???, r3 = ???
 	bgt maybeCollideShipAsteroid_earlyReturn
 
 	// there must be a collision
 
-	// asteroid.lifetime = 0;
-	mov r2, #0
-	str r2, [r0, #ENTITY_FIELD_LIFETIME]
+	// destroyAsteroid(asteroid)
+	mov r0, r4
+	bl destroyAsteroid
 
-	// ship.health -= asteroid.health; r2 = ??? r3 = ???
-	ldrsh r2, [r1, #SHIP_FIELD_HEALTH]
-	ldrsh r3, [r0, #ASTEROID_FIELD_HEALTH]
+	// ship.health -= asteroid.health;
+	ldrsh r2, [r5, #SHIP_FIELD_HEALTH]
+	ldrsh r3, [r4, #ASTEROID_FIELD_HEALTH]
 	subs r2, r2, r3
-	strh r2, [r1, #SHIP_FIELD_HEALTH]
+	strh r2, [r5, #SHIP_FIELD_HEALTH]
 	bllt killShip
 
 maybeCollideShipAsteroid_earlyReturn:
