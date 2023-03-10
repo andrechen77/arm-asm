@@ -1,4 +1,6 @@
+upgrades
 mario invulnerability
 extract config to top of file
 shaking background
 better visuals for health and fire rate
+pause game
