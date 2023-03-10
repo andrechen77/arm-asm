@@ -173,6 +173,13 @@ struct Ship extends Entity {
 // constants about the ship sprite (not associated with the Ship data type)
 .EQU SHIP_RADIUS, 16 * 8
 
+// constants associated with upgrades
+.EQU UPGRADE_COST_MAXHEALTH, 1
+.EQU UPGRADE_COST_BULLETSPEED, 1
+.EQU UPGRADE_COST_BULLETDAMAGE, 1
+.EQU UPGRADE_COST_MAXSPEED, 1
+.EQU UPGRADE_COST_FIRERATE, 1
+
 // let ship: &mut Ship;
 .align 2
 ship:
@@ -643,8 +650,6 @@ asteroidSpawner_astSizeFound:
 	pop {r4-r6, pc}
 // end asteroidSpawner
 
-.ltorg
-
 /*
 cometSpawner: either counts down a timer for the next comet spawn, or if the timer has just
 run out, spawns a comet and sets up the next spawn. Comets are just asteroids with a lot more health,
@@ -763,14 +768,22 @@ fn processPlayerInput() {
 
 	// same for yVel
 
-	if ship.currentFireCoolDown <= 0 && keyboardState.I.pressed {
+	if ship.currentFireCoolDown <= 0 && keyboardState[KEYBOARDSTATE_INDEXOF_I].pressed {
 		ship.currentFireCooldown += 100;
 		spawnBullet(ship);
 	}
 
-	if keyboardState.K.changed && keyboardState.K.pressed {
+	if K was just pressed {
 		spawnAsteroid();
 	}
+
+	if 1 was just pressed {
+		if mineralBank < UPGRADE_COST_MAXHEALTH {
+			mineral -= UPGRADE_COST_MAXHEALTH;
+			ship.maxHealth += 1;
+		}
+	}
+	// same for bullet speed, bullet damage, fire rate, max speed
 
 	if
 		(gameState == GameState::DeathScreen || gameState == GameState::StartScreen) &&
@@ -898,6 +911,68 @@ processPlayerInput_noFire:
 	cmp r1, #3
 	bleq spawnAsteroid
 
+	// r3 = mineralBank, r2 = *mineralBank
+	ldr r3, =mineralBank
+	ldr r2, [r3]
+
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_ONE]
+	cmp r1, #3
+	blt processPlayerInput_noUpgradeMaxHealth
+	cmp r2, #UPGRADE_COST_MAXHEALTH
+	blt processPlayerInput_noUpgradeMaxHealth
+	sub r2, r2, #UPGRADE_COST_MAXHEALTH
+	ldrsh r1, [r5, #SHIP_FIELD_MAXHEALTH]
+	add r1, r1, #1
+	strh r1, [r5, #SHIP_FIELD_MAXHEALTH]
+processPlayerInput_noUpgradeMaxHealth:
+
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_TWO]
+	cmp r1, #3
+	blt processPlayerInput_noUpgradeBulletSpeed
+	cmp r2, #UPGRADE_COST_BULLETSPEED
+	blt processPlayerInput_noUpgradeBulletSpeed
+	sub r2, r2, #UPGRADE_COST_BULLETSPEED
+	ldrsh r1, [r5, #SHIP_FIELD_BULLETSPEED]
+	add r1, r1, #1
+	strh r1, [r5, #SHIP_FIELD_BULLETSPEED]
+processPlayerInput_noUpgradeBulletSpeed:
+
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_THREE]
+	cmp r1, #3
+	blt processPlayerInput_noUpgradeBulletDamage
+	cmp r2, #UPGRADE_COST_BULLETDAMAGE
+	blt processPlayerInput_noUpgradeBulletDamage
+	sub r2, r2, #UPGRADE_COST_BULLETDAMAGE
+	ldrsh r1, [r5, #SHIP_FIELD_BULLETDAMAGE]
+	add r1, r1, #1
+	strh r1, [r5, #SHIP_FIELD_BULLETDAMAGE]
+processPlayerInput_noUpgradeBulletDamage:
+
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_FOUR]
+	cmp r1, #3
+	blt processPlayerInput_noUpgradeFireRate
+	cmp r2, #UPGRADE_COST_FIRERATE
+	blt processPlayerInput_noUpgradeFireRate
+	sub r2, r2, #UPGRADE_COST_FIRERATE
+	ldrsb r1, [r5, #SHIP_FIELD_FIRERATE]
+	add r1, r1, #1
+	strb r1, [r5, #SHIP_FIELD_FIRERATE]
+processPlayerInput_noUpgradeFireRate:
+
+	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_FIVE]
+	cmp r1, #3
+	blt processPlayerInput_noUpgradeMaxSpeed
+	cmp r2, #UPGRADE_COST_MAXSPEED
+	blt processPlayerInput_noUpgradeMaxSpeed
+	sub r2, r2, #UPGRADE_COST_MAXSPEED
+	ldrsh r1, [r5, #SHIP_FIELD_MAXSPEED]
+	add r1, r1, #2
+	strh r1, [r5, #SHIP_FIELD_MAXSPEED]
+processPlayerInput_noUpgradeMaxSpeed:
+
+	// restore *mineralBank to memory
+	str r2, [r3]
+
 	// start game
 	ldrb r1, [r4, #KEYBOARDSTATE_INDEXOF_SPACE]
 	cmp r1, #3
@@ -911,6 +986,8 @@ processPlayerInput_noStart:
 
 	pop {r4-r5, pc}
 // end processPlayerInput
+
+.ltorg
 
 /*
 fn startGame() {
