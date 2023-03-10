@@ -21,7 +21,7 @@ How to play the game:
  * Asteroids get stronger and more frequent as the game progresses.
  * Survive as long as possible, destroying asteroids to rack up score.
 
-The whole game is in one file because it's of school's submission requirements.
+The whole game is in one file because of school submission requirements.
 Intended to run on https://cpulator.01xz.net/?sys=arm-de1soc
 */
 
@@ -174,11 +174,13 @@ struct Ship extends Entity {
 .EQU SHIP_RADIUS, 16 * 8
 
 // constants associated with upgrades
-.EQU UPGRADE_COST_MAXHEALTH, 1
-.EQU UPGRADE_COST_BULLETSPEED, 1
-.EQU UPGRADE_COST_BULLETDAMAGE, 1
-.EQU UPGRADE_COST_MAXSPEED, 1
-.EQU UPGRADE_COST_FIRERATE, 1
+.EQU UPGRADE_COST_MAXHEALTH, 4
+.EQU UPGRADE_COST_BULLETSPEED, 4
+.EQU UPGRADE_COST_BULLETDAMAGE, 4
+.EQU UPGRADE_COST_MAXSPEED, 4
+.EQU UPGRADE_COST_FIRERATE, 4
+
+.EQU SPECIAL_ASTEROID_CHANCE, 0x20000000
 
 // let ship: &mut Ship;
 .align 2
@@ -352,38 +354,75 @@ struct DifficultyEntry {
 // let difficultyTable: &[DifficultyEntry; 10];
 .align 2
 difficultyTable:
-	.word 500, 50, 0, 0
+	.word 500, 50, 0x08000000 * 0, 0x08000000 * 0
 	.hword 8, 8, 3
 	.skip 2
-	.word 500, 45, 0, 0
-	.hword 8, 8, 3
+	.word 490, 45, 0x08000000 * 0, 0x08000000 * 1
+	.hword 9, 9, 4
 	.skip 2
-	.word 500, 41, 0, 0
-	.hword 8, 8, 3
+	.word 480, 41, 0x08000000 * 0, 0x08000000 * 2
+	.hword 10, 10, 5
 	.skip 2
-	.word 500, 37, 0, 0
-	.hword 8, 8, 3
+	.word 470, 37, 0x08000000 * 0, 0x08000000 * 3
+	.hword 11, 11, 6
 	.skip 2
-	.word 500, 33, 0, 0
-	.hword 8, 8, 3
+	.word 460, 33, 0x08000000 * 0, 0x08000000 * 4
+	.hword 12, 12, 7
 	.skip 2
-	.word 500, 30, 0, 0
-	.hword 8, 8, 3
+	.word 450, 30, 0x08000000 * 0, 0x08000000 * 5
+	.hword 13, 13, 8
 	.skip 2
-	.word 500, 27, 0, 0
-	.hword 8, 8, 3
+	.word 440, 27, 0x08000000 * 0, 0x08000000 * 6
+	.hword 14, 14, 9
 	.skip 2
-	.word 500, 24, 0, 0
-	.hword 8, 8, 3
+	.word 430, 24, 0x08000000 * 0, 0x08000000 * 7
+	.hword 15, 15, 10
 	.skip 2
-	.word 500, 22, 0, 0
-	.hword 8, 8, 3
+	.word 420, 22, 0x08000000 * 0, 0x08000000 * 8
+	.hword 16, 16, 11
 	.skip 2
-	.word 500, 20, 0, 0
-	.hword 8, 8, 3
+	.word 410, 20, 0x08000000 * 0, 0x08000000 * 9
+	.hword 17, 17, 12
 	.skip 2
-	.word 500, 18, 0, 0
-	.hword 8, 8, 3
+	.word 400, 18, 0x08000000 * 0, 0x08000000 * 10
+	.hword 18, 18, 13
+	.skip 2
+
+	.word 390, 17, 0x08000000 * 1, 0x08000000 * 10
+	.hword 18, 18, 14
+	.skip 2
+	.word 380, 17, 0x08000000 * 2, 0x08000000 * 10
+	.hword 19, 19, 15
+	.skip 2
+	.word 370, 16, 0x08000000 * 3, 0x08000000 * 10
+	.hword 20, 20, 16
+	.skip 2
+	.word 360, 16, 0x08000000 * 4, 0x08000000 * 10
+	.hword 21, 21, 17
+	.skip 2
+	.word 350, 15, 0x08000000 * 5, 0x08000000 * 10
+	.hword 22, 22, 18
+	.skip 2
+	.word 340, 15, 0x08000000 * 6, 0x08000000 * 10
+	.hword 23, 23, 19
+	.skip 2
+	.word 330, 15, 0x08000000 * 7, 0x08000000 * 11
+	.hword 24, 24, 20
+	.skip 2
+	.word 320, 14, 0x08000000 * 8, 0x08000000 * 12
+	.hword 25, 25, 21
+	.skip 2
+	.word 310, 14, 0x08000000 * 9, 0x08000000 * 13
+	.hword 26, 26, 22
+	.skip 2
+	.word 300, 14, 0x08000000 * 10, 0x08000000 * 14
+	.hword 27, 27, 23
+	.skip 2
+	.word 290, 14, 0x08000000 * 11, 0x08000000 * 15
+	.hword 28, 28, 24
+	.skip 2
+	.word 280, 14, 0x08000000 * 12, 0x08000000 * 16
+	.hword 29, 29, 25
 	.skip 2
 	// TODO add more entries
 
@@ -546,13 +585,13 @@ fn asteroidSpawner() {
 		0..difficulty.medAsteroidChance => 7,
 		_ => 6,
 	};
-	asteroid.isSpecial = rand() < 1 << 31;
+	asteroid.isSpecial = rand() < SPECIAL_ASTEROID_CHANCE;
 	asteroid.costume = getAsteroidSkin(asteroid.size, asteroid.isSpecial);
 	asteroid.yVel = difficulty.baseYVel * (1 + (rand() as fixpt32_32) / 4);
 	asteroid.yPos = -32 * 8;
 	let xVelScale = rand() as fixpt32_32;
 	asteroid.xVel = difficulty.rangeXVel * xVelScale * if (xVelScale as u32) & 0x80000000 { -1 } else { 1 };
-	asteroid.xPos = (PIX_WIDTH * 8) * (rand() as fixpt32_32) + asteroid.xVel * 64;
+	asteroid.xPos = (PIX_WIDTH * 8) * (rand() as fixpt32_32) + asteroid.xVel * 512;
 }
 */
 asteroidSpawner_countdown:
@@ -611,7 +650,8 @@ asteroidSpawner_astSizeFound:
 
 	// r0 = ???
 	bl rand
-	cmp r0, #(1 << 31)
+	ldr r1, =SPECIAL_ASTEROID_CHANCE
+	cmp r0, r1
 	mov r0, #0
 	movlo r0, #1
 	addlo r6, r6, #3 // use r6 to store the index of the skin into asteroidSkinArray
@@ -642,7 +682,7 @@ asteroidSpawner_astSizeFound:
 	bl rand
 	ldr r1, =(PIX_WIDTH * 8)
 	umull r2, r3, r0, r1 // r3 = base xPos
-	mov r0, #64
+	mov r0, #512
 	smull r1, r2, r0, r6 // r2 = offset based on xVel
 	add r3, r3, r2
 	str r3, [r5, #ENTITY_FIELD_XPOS]
@@ -652,7 +692,7 @@ asteroidSpawner_astSizeFound:
 
 /*
 cometSpawner: either counts down a timer for the next comet spawn, or if the timer has just
-run out, spawns a comet and sets up the next spawn. Comets are just asteroids with a lot more health,
+run out, spawns a comet and sets up the next spawn. Comets are just asteroids with 1 health,
 fixed spawn paths, and a lot more speed.
 
 fn cometSpawner() {
@@ -667,7 +707,7 @@ fn cometSpawner() {
 
 	let comet = addSpace(asteroidBuff);
 	comet.lifetime = 60;
-	comet.originalHealth = 15000;
+	comet.originalHealth = difficulty.baseAsteroidHealth;
 	comet.health = comet.originalHealth;
 	comet.size = 6;
 	let random = rand();
@@ -675,7 +715,7 @@ fn cometSpawner() {
 	comet.costume = if goingLeft { cometSkinLeft } else { cometSkinRight };
 	comet.xPos = if goingLeft { (PIX_WIDTH + 32) * 8 } else { -32 * 8 };
 	comet.yPos = (PIX_HEIGHT * 8 / 2) * (random as fixpt32_32);
-	comet.yVel = difficulty.baseYVel * 4;
+	comet.yVel = difficulty.rangeXVel * 4;
 	comet.xVel = difficulty.rangeXVel * 4 * if goingLeft { -1 } else { 1 };
 	comet.isSpecial = false;
 }
@@ -707,7 +747,7 @@ cometSpawner:
 	mov r0, #60
 	str r0, [r5, #ENTITY_FIELD_LIFETIME]
 
-	ldr r0, =15000
+	ldr r0, [r4, #DIFFICULTYENTRY_FIELD_BASEASTEROIDHEALTH]
 	strh r0, [r5, #ASTEROID_FIELD_HEALTH]
 	strh r0, [r5, #ASTEROID_FIELD_ORIGINALHEALTH]
 
@@ -732,12 +772,12 @@ cometSpawner:
 	umull r2, r1, r0, r1 // r1 = yPos
 	str r1, [r5, #ENTITY_FIELD_YPOS]
 
-	ldrsh r1, [r4, #DIFFICULTYENTRY_FIELD_BASEYVEL]
-	lsl r1, #2
+	// r1 = difficulty.rangeXVel
+	ldrsh r1, [r4, #DIFFICULTYENTRY_FIELD_RANGEXVEL]
+	lsl r1, r1, #2
 	strh r1, [r5, #ENTITY_FIELD_YVEL]
 
-	ldrsh r1, [r4, #DIFFICULTYENTRY_FIELD_RANGEXVEL]
-	lsl r1, #2
+	// r1 = ???
 	tst r0, #0x80000000
 	rsbne r1, r1, #0
 	strh r1, [r5, #ENTITY_FIELD_XVEL]
@@ -2024,7 +2064,7 @@ spawnAsteroid:
 /*
 fn spawnItem(x: i32, y: i32, isSpecial: bool) {
 	let item: &mut Item = addSpace(itemBuff);
-	item.lifetime = 100;
+	item.lifetime = 512;
 	item.xPos = x;
 	item.yPos = y;
 	item.xVel = 0;
@@ -2050,7 +2090,7 @@ spawnItem:
 	bl addSpace
 	mov r4, r0
 
-	mov r0, #100
+	mov r0, #512
 	str r0, [r4, #ENTITY_FIELD_LIFETIME]
 
 	str r5, [r4, #ENTITY_FIELD_XPOS]
